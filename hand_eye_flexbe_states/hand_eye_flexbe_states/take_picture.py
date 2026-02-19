@@ -32,6 +32,8 @@ class TakePictureState(EventState):
         self.images_taken = 0  # Contador de fotos tomadas en ESTA ejecución
         self.pipeline = None
         self.color_image = None
+        self.window_created = False  # Control para crear ventana SOLO UNA VEZ
+        self.window_name = 'CALIBRACIÓN - Toma manual de fotos'
         
         # Configurar ruta de guardado
         try:
@@ -120,6 +122,13 @@ class TakePictureState(EventState):
                     Logger.logerr("❌ Error leyendo de cámara USB")
                     return 'failed'
             
+            # ===== CREAR VENTANA SOLO UNA VEZ =====
+            if not self.window_created:
+                cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+                self.window_created = True
+                Logger.loginfo("🪟 Ventana de captura creada")
+            # ======================================
+            
             # Preparar imagen para mostrar (con overlay de información)
             display_image = self.color_image.copy()
             
@@ -134,9 +143,8 @@ class TakePictureState(EventState):
             cv2.putText(display_image, "👉 ENTER: Tomar foto | ESC: Cancelar", 
                        (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Mostrar ventana
-            cv2.namedWindow('CALIBRACIÓN - Toma manual de fotos', cv2.WINDOW_NORMAL)
-            cv2.imshow('CALIBRACIÓN - Toma manual de fotos', display_image)
+            # Actualizar la imagen en la ventana existente (NO crear nueva)
+            cv2.imshow(self.window_name, display_image)
             
             key = cv2.waitKey(1) & 0xFF
             
@@ -151,30 +159,35 @@ class TakePictureState(EventState):
                 
                 Logger.loginfo(f"✅ FOTO {self.images_taken}/{self.pic_num} guardada: {os.path.basename(filename)}")
                 
-                # Feedback visual rápido
+                # Feedback visual rápido (usando la MISMA ventana)
                 feedback = self.color_image.copy()
                 cv2.putText(feedback, f"¡FOTO {self.images_taken}/{self.pic_num} GUARDADA!", 
                            (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
-                cv2.imshow('CALIBRACIÓN - Toma manual de fotos', feedback)
+                cv2.imshow(self.window_name, feedback)
                 cv2.waitKey(500)  # Mostrar confirmación por medio segundo
                 
                 # ===== AUTO-DETECCIÓN: ¿Ya completamos? =====
                 if self.images_taken >= self.pic_num:
                     Logger.loginfo(f"🎯 ¡OBJETIVO ALCANZADO! {self.pic_num} imágenes capturadas")
                     Logger.loginfo("🔄 Pasando automáticamente a fase de calibración...")
-                    cv2.destroyAllWindows()
+                    cv2.destroyWindow(self.window_name)  # Destruir SOLO esta ventana
+                    self.window_created = False
                     return 'done'  # <-- Automático: pasa a calibración
                 # ============================================
                     
             elif key == 27:  # ESC - Cancelar manualmente
                 Logger.logwarn("⏹️ Captura cancelada por el usuario")
-                cv2.destroyAllWindows()
+                cv2.destroyWindow(self.window_name)
+                self.window_created = False
                 return 'failed'
             
         except Exception as e:
             Logger.logerr(f"❌ Error durante captura: {str(e)}")
             import traceback
             traceback.print_exc()
+            if self.window_created:
+                cv2.destroyWindow(self.window_name)
+                self.window_created = False
             return 'failed'
         
         # Seguimos en el mismo estado esperando más fotos
@@ -191,7 +204,10 @@ class TakePictureState(EventState):
     def _cleanup(self):
         """Liberar recursos de cámara"""
         try:
-            cv2.destroyAllWindows()
+            if self.window_created:
+                cv2.destroyWindow(self.window_name)
+                self.window_created = False
+                Logger.loginfo("🪟 Ventana de captura cerrada")
             
             if self.pipeline:
                 self.pipeline.stop()
