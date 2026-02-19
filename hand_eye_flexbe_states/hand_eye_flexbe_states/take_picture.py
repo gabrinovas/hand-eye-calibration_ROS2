@@ -202,20 +202,44 @@ class TakePictureState(EventState):
         self._cleanup()
     
     def _cleanup(self):
-        """Liberar recursos de cámara"""
+        """Liberar recursos de cámara de forma segura"""
         try:
+            # Cerrar ventana si existe
             if self.window_created:
-                cv2.destroyWindow(self.window_name)
+                try:
+                    cv2.destroyWindow(self.window_name)
+                    Logger.loginfo("🪟 Ventana de captura cerrada")
+                except:
+                    pass
                 self.window_created = False
-                Logger.loginfo("🪟 Ventana de captura cerrada")
             
-            if self.pipeline:
-                self.pipeline.stop()
-                Logger.loginfo("🛑 Pipeline de RealSense detenido")
+            # Detener pipeline de RealSense de forma segura
+            if hasattr(self, 'pipeline') and self.pipeline is not None:
+                try:
+                    # Verificar si el pipeline está realmente activo antes de detener
+                    # Un simple try-except es suficiente
+                    self.pipeline.stop()
+                    Logger.loginfo("🛑 Pipeline de RealSense detenido")
+                except RuntimeError as e:
+                    if "stop() cannot be called before start()" in str(e):
+                        # Esto es normal si ya estaba detenido
+                        Logger.loginfo("ℹ️ Pipeline de RealSense ya estaba detenido")
+                    else:
+                        Logger.logwarn(f"⚠️ Error al detener pipeline: {str(e)}")
+                except Exception as e:
+                    Logger.logwarn(f"⚠️ Error inesperado al detener pipeline: {str(e)}")
+                finally:
+                    self.pipeline = None  # Marcar como None para no volver a intentar
             
-            if hasattr(self, 'capture') and self.capture:
-                self.capture.release()
-                Logger.loginfo("🛑 Cámara USB liberada")
+            # Liberar cámara USB si existe
+            if hasattr(self, 'capture') and self.capture is not None:
+                try:
+                    self.capture.release()
+                    Logger.loginfo("🛑 Cámara USB liberada")
+                except Exception as e:
+                    Logger.logwarn(f"⚠️ Error liberando cámara USB: {str(e)}")
+                finally:
+                    self.capture = None
                 
         except Exception as e:
             Logger.logwarn(f"Error en limpieza: {str(e)}")
