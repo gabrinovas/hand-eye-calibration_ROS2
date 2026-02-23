@@ -6,6 +6,7 @@ import numpy as np
 import os
 import time
 import glob
+import threading
 from ament_index_python.packages import get_package_share_directory
 
 class TakePictureState(EventState):
@@ -37,7 +38,7 @@ class TakePictureState(EventState):
         self.window_created = False
         self.window_name = 'CALIBRACIÓN - Toma manual de fotos'
         self.camera_initialized = False
-        self.last_photo_taken = False
+        self.should_exit = False
         
         if output_folder:
             self.save_pwd = output_folder
@@ -122,9 +123,9 @@ class TakePictureState(EventState):
     def execute(self, userdata):
         """Bucle principal"""
         
-        # Si ya se tomó la última foto, limpiar y salir
-        if self.last_photo_taken:
-            self._cleanup()
+        # Si debemos salir, limpiamos y devolvemos done
+        if self.should_exit:
+            self._nuclear_cleanup()
             return 'done'
         
         if not self.camera_initialized:
@@ -192,80 +193,67 @@ class TakePictureState(EventState):
                 
                 Logger.loginfo(f"✅ FOTO {self.images_taken}/{self.pic_num} guardada: {os.path.basename(filename)}")
                 
-                # Feedback visual
-                feedback = self.color_image.copy()
-                overlay = feedback.copy()
-                cv2.rectangle(overlay, (h//4, w//4), (3*h//4, 3*w//4), (0, 255, 0), -1)
-                cv2.addWeighted(overlay, 0.3, feedback, 0.7, 0, feedback)
-                cv2.putText(feedback, f"¡FOTO {self.images_taken}/{self.pic_num} GUARDADA!", 
-                           (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
-                cv2.imshow(self.window_name, feedback)
-                cv2.waitKey(500)
-                
+                # Si es la última foto
                 if self.images_taken >= self.pic_num:
                     Logger.loginfo(f"🎯 ¡OBJETIVO ALCANZADO! {self.pic_num} imágenes")
-                    Logger.loginfo("🔄 Pasando a calibración...")
-                    # Marcar que ya se tomó la última foto
-                    self.last_photo_taken = True
-                    # Cerrar ventana inmediatamente
-                    if self.window_created:
-                        cv2.destroyWindow(self.window_name)
-                        self.window_created = False
-                    # No devolvemos 'done' aquí, lo haremos en la próxima iteración
-                    # después de limpiar recursos
-                    return  # Salir de execute sin devolver outcome
+                    Logger.loginfo("🔄 Cerrando ventana y pasando a calibración...")
+                    
+                    # Marcar que debemos salir
+                    self.should_exit = True
+                    
+                    # Cerrar ventana de forma nuclear
+                    self._nuclear_cleanup()
+                    
+                    return 'done'
                     
             elif key == 27:  # ESC
                 Logger.logwarn("⏹️ Captura cancelada")
-                cv2.destroyWindow(self.window_name)
-                self.window_created = False
-                self._cleanup()
+                self._nuclear_cleanup()
                 return 'failed'
             
         except Exception as e:
             Logger.logerr(f"❌ Error: {str(e)}")
-            if self.window_created:
-                cv2.destroyWindow(self.window_name)
-                self.window_created = False
-            self._cleanup()
+            self._nuclear_cleanup()
             return 'failed'
         
         return
     
-    def on_stop(self):
-        self._cleanup()
-    
-    def on_exit(self, userdata):
-        self._cleanup()
-    
-    def _cleanup(self):
-        """Liberar recursos"""
+    def _nuclear_cleanup(self):
+        """LIMPIEZA NUCLEAR - cierra todo sin piedad"""
         try:
-            if self.window_created:
-                try:
-                    cv2.destroyWindow(self.window_name)
-                    Logger.loginfo("🪟 Ventana cerrada")
-                except:
-                    pass
-                self.window_created = False
+            # Cerrar TODAS las ventanas de OpenCV
+            cv2.destroyAllWindows()
+            for _ in range(5):  # Múltiples intentos
+                cv2.waitKey(1)
             
+            self.window_created = False
+            Logger.loginfo("💥 Ventanas cerradas (modo nuclear)")
+            
+            # Detener RealSense
             if hasattr(self, 'pipeline') and self.pipeline is not None:
                 try:
                     self.pipeline.stop()
                     Logger.loginfo("🛑 RealSense detenido")
-                except Exception as e:
-                    Logger.logwarn(f"⚠️ Error al detener RealSense: {str(e)}")
+                except:
+                    pass
                 finally:
                     self.pipeline = None
             
+            # Liberar cámara USB
             if hasattr(self, 'capture') and self.capture is not None:
                 try:
                     self.capture.release()
                     Logger.loginfo("🛑 Cámara USB liberada")
-                except Exception as e:
-                    Logger.logwarn(f"⚠️ Error al liberar cámara USB: {str(e)}")
+                except:
+                    pass
                 finally:
                     self.capture = None
                 
         except Exception as e:
-            Logger.logwarn(f"Error en limpieza: {str(e)}")
+            Logger.logwarn(f"Error en limpieza nuclear: {str(e)}")
+    
+    def on_stop(self):
+        self._nuclear_cleanup()
+    
+    def on_exit(self, userdata):
+        self._nuclear_cleanup()
