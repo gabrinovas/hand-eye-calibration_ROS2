@@ -22,9 +22,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'automatic_hand_eye_calibration_sm = hand_eye_flexbe_behaviors.automatic_hand_eye_calibration_sm',
             'camera_calibration_sm = hand_eye_flexbe_behaviors.camera_calibration_sm',
-            'hand_eye_calibration_sm = hand_eye_flexbe_behaviors.hand_eye_calibration_sm',
             'manual_hand_eye_calibration_sm = hand_eye_flexbe_behaviors.manual_hand_eye_calibration_sm',
             'verify_calibraion_sm = hand_eye_flexbe_behaviors.verify_calibraion_sm',
         ],
