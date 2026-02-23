@@ -43,17 +43,14 @@ class TakePictureState(EventState):
             # Si se especifica output_folder, usar ese
             self.save_pwd = output_folder
         else:
-            # Por defecto, usar la carpeta con subcarpeta 'pic'
-            base_folder = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
-            self.save_pwd = os.path.join(base_folder, 'pic')  # Importante: añadir /pic
-            self.calibration_folder = base_folder  # La carpeta padre para la calibración
+            # Por defecto, usar la carpeta SIN subcarpeta pic
+            self.save_pwd = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
         
         # Crear directorio si no existe
         os.makedirs(self.save_pwd, exist_ok=True)
         
         Logger.loginfo(f"📷 Las imágenes se guardarán en: {self.save_pwd}")
         Logger.loginfo(f"📸 Objetivo: {self.pic_num} imágenes")
-        Logger.loginfo(f"⚙️ Carpeta de calibración: {self.calibration_folder}")
         
     def on_start(self):
         """Inicializar: LIMPIAR TODO y preparar cámara"""
@@ -71,38 +68,32 @@ class TakePictureState(EventState):
         except Exception as e:
             Logger.logwarn(f"⚠️ Error durante limpieza: {str(e)}")
         
-        # Inicializar cámara (NO devolver failed aquí, solo marcar estado)
+        # Inicializar cámara
         self.camera_initialized = self._init_camera()
         
         if not self.camera_initialized:
             Logger.logerr("❌ No se pudo inicializar la cámara. Verifica la conexión.")
-            # No devolvemos failed aquí para que FlexBE pueda manejar el error
     
     def _init_camera(self):
         """Inicializa la cámara según el tipo"""
         try:
             if self.camera_type == 'realsense':
-                # Intentar con diferentes configuraciones si la primera falla
+                # Intentar con diferentes configuraciones
                 try:
-                    # Primero intentar con resolución más baja
+                    self.pipeline = rs.pipeline()
+                    config = rs.config()
+                    config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
+                    self.pipeline.start(config)
+                    Logger.loginfo("✅ RealSense iniciada correctamente (1920x1080)")
+                except Exception as e:
+                    Logger.logwarn(f"⚠️ No se pudo iniciar con 1920x1080: {str(e)}")
                     self.pipeline = rs.pipeline()
                     config = rs.config()
                     config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
                     self.pipeline.start(config)
                     Logger.loginfo("✅ RealSense iniciada correctamente (1280x720)")
-                except Exception as e:
-                    Logger.logwarn(f"⚠️ No se pudo iniciar con 1280x720: {str(e)}")
-                    # Intentar con resolución por defecto
-                    self.pipeline = rs.pipeline()
-                    config = rs.config()
-                    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-                    self.pipeline.start(config)
-                    Logger.loginfo("✅ RealSense iniciada correctamente (640x480)")
                 
-                # Pequeña pausa para estabilizar
                 time.sleep(1.0)
-                
-                # Obtener información de la cámara
                 active_profile = self.pipeline.get_active_profile()
                 color_stream = active_profile.get_stream(rs.stream.color)
                 intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
@@ -116,14 +107,12 @@ class TakePictureState(EventState):
                     Logger.logerr("❌ No se pudo abrir la cámara USB")
                     return False
                 
-                # Configurar resolución
                 self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
                 self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
                 
-                # Leer un frame de prueba
                 ret, frame = self.capture.read()
                 if not ret:
-                    Logger.logerr("❌ No se pudo leer frame de prueba de cámara USB")
+                    Logger.logerr("❌ No se pudo leer frame de prueba")
                     return False
                 
                 Logger.loginfo("✅ Cámara USB iniciada correctamente")
@@ -136,20 +125,19 @@ class TakePictureState(EventState):
     def execute(self, userdata):
         """Bucle principal"""
         
-        # Si la cámara no se inicializó, fallar
         if not self.camera_initialized:
             Logger.logerr("❌ Cámara no disponible. Abortando.")
             return 'failed'
         
         try:
-            # Obtener frame de la cámara
+            # Obtener frame
             if self.camera_type == 'realsense':
                 try:
                     frames = self.pipeline.wait_for_frames(timeout_ms=5000)
                     color_frame = frames.get_color_frame()
                     
                     if not color_frame:
-                        Logger.logwarn("⏳ Esperando frames de RealSense...")
+                        Logger.logwarn("⏳ Esperando frames...")
                         return
                     
                     self.color_image = np.asanyarray(color_frame.get_data())
@@ -164,48 +152,39 @@ class TakePictureState(EventState):
                     Logger.logerr("❌ Error leyendo de cámara USB")
                     return 'failed'
             
-            # Crear ventana SOLO UNA VEZ
+            # Crear ventana
             if not self.window_created:
                 cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
                 cv2.resizeWindow(self.window_name, 1280, 720)
                 self.window_created = True
                 Logger.loginfo("🪟 Ventana de captura creada")
             
-            # Preparar imagen para mostrar
+            # Preparar imagen
             display_image = self.color_image.copy()
-            
-            # Calcular cuántas faltan
             remaining = self.pic_num - self.images_taken
             
-            # Agregar información en la imagen
+            # Overlay de información
             h, w = display_image.shape[:2]
-            
-            # Fondo semitransparente para texto
             overlay = display_image.copy()
             cv2.rectangle(overlay, (10, 10), (w-10, 220), (0, 0, 0), -1)
             cv2.addWeighted(overlay, 0.5, display_image, 0.5, 0, display_image)
             
-            # Texto
             cv2.putText(display_image, f"📸 CAPTURADAS: {self.images_taken}/{self.pic_num}", 
                        (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
             cv2.putText(display_image, f"⏳ FALTAN: {remaining}", 
                        (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
-            cv2.putText(display_image, f"📁 Guardando en: {os.path.basename(os.path.dirname(self.save_pwd))}/pic", 
+            cv2.putText(display_image, f"📁 Guardando en: {os.path.basename(self.save_pwd)}", 
                        (50, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             cv2.putText(display_image, "👉 ESPACIO o ENTER: Tomar foto | ESC: Cancelar", 
                        (50, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
             
-            # Mostrar imagen
             cv2.imshow(self.window_name, display_image)
             key = cv2.waitKey(1) & 0xFF
             
-            # Capturar con ESPACIO o ENTER
-            if key == 13 or key == 32:  # 13=ENTER, 32=ESPACIO
+            if key == 13 or key == 32:  # ENTER o ESPACIO
                 
-                # Generar nombre secuencial
                 filename = os.path.join(self.save_pwd, f"camera-pic-of-charucoboard-{self.images_taken + 1:02d}.jpg")
                 
-                # Guardar imagen
                 cv2.imwrite(filename, self.color_image)
                 self.images_taken += 1
                 
@@ -213,7 +192,6 @@ class TakePictureState(EventState):
                 
                 # Feedback visual
                 feedback = self.color_image.copy()
-                # Fondo verde semitransparente
                 overlay = feedback.copy()
                 cv2.rectangle(overlay, (h//4, w//4), (3*h//4, 3*w//4), (0, 255, 0), -1)
                 cv2.addWeighted(overlay, 0.3, feedback, 0.7, 0, feedback)
@@ -222,68 +200,60 @@ class TakePictureState(EventState):
                 cv2.imshow(self.window_name, feedback)
                 cv2.waitKey(500)
                 
-                # AUTO-DETECCIÓN: ¿Ya completamos?
                 if self.images_taken >= self.pic_num:
-                    Logger.loginfo(f"🎯 ¡OBJETIVO ALCANZADO! {self.pic_num} imágenes capturadas")
-                    Logger.loginfo("🔄 Pasando automáticamente a fase de calibración...")
+                    Logger.loginfo(f"🎯 ¡OBJETIVO ALCANZADO! {self.pic_num} imágenes")
+                    Logger.loginfo("🔄 Pasando a calibración...")
                     cv2.destroyWindow(self.window_name)
                     self.window_created = False
                     return 'done'
                     
-            elif key == 27:  # ESC - Cancelar
-                Logger.logwarn("⏹️ Captura cancelada por el usuario")
+            elif key == 27:  # ESC
+                Logger.logwarn("⏹️ Captura cancelada")
                 cv2.destroyWindow(self.window_name)
                 self.window_created = False
                 return 'failed'
             
         except Exception as e:
-            Logger.logerr(f"❌ Error durante captura: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            Logger.logerr(f"❌ Error: {str(e)}")
             if self.window_created:
                 cv2.destroyWindow(self.window_name)
                 self.window_created = False
             return 'failed'
         
-        return  # Seguir en el mismo estado
+        return
     
     def on_stop(self):
-        """Limpiar recursos al detener"""
         self._cleanup()
     
     def on_exit(self, userdata):
-        """Limpiar recursos al salir"""
         self._cleanup()
     
     def _cleanup(self):
-        """Liberar recursos de cámara de forma segura"""
+        """Liberar recursos"""
         try:
-            # Cerrar ventana si existe
             if self.window_created:
                 try:
                     cv2.destroyWindow(self.window_name)
-                    Logger.loginfo("🪟 Ventana de captura cerrada")
+                    Logger.loginfo("🪟 Ventana cerrada")
                 except:
                     pass
                 self.window_created = False
             
-            # Detener pipeline de RealSense
             if hasattr(self, 'pipeline') and self.pipeline is not None:
                 try:
                     self.pipeline.stop()
-                    Logger.loginfo("🛑 Pipeline de RealSense detenido")
+                    Logger.loginfo("🛑 RealSense detenido")
                 except Exception as e:
-                    Logger.logwarn(f"⚠️ Error al detener pipeline: {str(e)}")
+                    Logger.logwarn(f"⚠️ Error: {str(e)}")
                 finally:
                     self.pipeline = None
             
-            # Liberar cámara USB
             if hasattr(self, 'capture') and self.capture is not None:
                 try:
                     self.capture.release()
                     Logger.loginfo("🛑 Cámara USB liberada")
                 except Exception as e:
-                    Logger.logwarn(f"⚠️ Error liberando cámara USB: {str(e)}")
+                    Logger.logwarn(f"⚠️ Error: {str(e)}")
                 finally:
                     self.capture = None
                 

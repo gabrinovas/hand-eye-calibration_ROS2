@@ -31,14 +31,14 @@ class CharucoCameraCalibrationState(EventState):
         else:
             self.images_folder = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
         
-        # IMPORTANTE: Las imágenes están directamente en la carpeta, no en subcarpeta 'pic'
+        # IMPORTANTE: Las imágenes están DIRECTAMENTE en la carpeta, sin subcarpeta pic
         self.pic_folder = self.images_folder
         
-        # Carpeta final donde queremos guardar la calibración
+        # Carpeta final para guardar la calibración
         self.calibration_output_folder = os.path.expanduser('~/drims_ws/calibrations')
         self.final_output_path = os.path.join(self.calibration_output_folder, 'camera_intrinsics.yaml')
         
-        # Ruta al archivo de configuración de charuco_calibrator
+        # Ruta al archivo de configuración
         try:
             self.config_file = os.path.join(
                 get_package_share_directory('charuco_calibrator'),
@@ -53,20 +53,20 @@ class CharucoCameraCalibrationState(EventState):
         Logger.loginfo(f"⚙️ Archivo de configuración: {self.config_file}")
         Logger.loginfo(f"📁 Archivo final de calibración: {self.final_output_path}")
         
-        # Crear archivo temporal de configuración con los parámetros actualizados
+        # Crear archivo temporal de configuración
         self.temp_config = os.path.join(self.images_folder, 'temp_charuco_params.yaml')
         self._create_temp_config()
 
     def _create_temp_config(self):
-        """Crea un archivo de configuración temporal con los parámetros actuales"""
+        """Crea archivo de configuración temporal"""
         config_content = f"""charuco_calibrator:
   ros__parameters:
     charuco_rows: {self.row_count}
     charuco_cols: {self.col_count}
     square_length: {self.square_size}
     marker_length: {self.marker_size}
-    dictionary: "DICT_4X4_1000"
-    output_file: "camera_intrinsics.yaml"  # Cambiado para que coincida con el nombre final
+    dictionary: "DICT_4X4_100"
+    output_file: "camera_intrinsics.yaml"
     image_width: 1920
     image_height: 1080
     min_markers: 4
@@ -76,7 +76,8 @@ class CharucoCameraCalibrationState(EventState):
         try:
             with open(self.temp_config, 'w') as f:
                 f.write(config_content)
-            Logger.loginfo(f"✅ Archivo de configuración temporal creado: {self.temp_config}")
+            Logger.loginfo(f"✅ Archivo temporal: {self.temp_config}")
+            Logger.loginfo(f"   Diccionario: DICT_4X4_100 (70 marcadores)")
         except Exception as e:
             Logger.logwarn(f"⚠️ No se pudo crear archivo temporal: {str(e)}")
     
@@ -90,26 +91,30 @@ class CharucoCameraCalibrationState(EventState):
         
         if not images:
             Logger.logerr(f"❌ No se encontraron imágenes en: {self.pic_folder}")
-            Logger.loginfo("💡 Asegúrate de haber capturado imágenes primero con el estado 'take_picture'")
-            Logger.loginfo(f"📁 Las imágenes deberían estar en: {self.pic_folder}")
+            Logger.loginfo("💡 Asegúrate de haber capturado imágenes primero")
             return "failed"
         
-        Logger.loginfo(f"🔍 Encontradas {len(images)} imágenes para calibración")
-        Logger.loginfo(f"🚀 Iniciando calibración con charuco_calibrator...")
+        Logger.loginfo(f"🔍 Encontradas {len(images)} imágenes")
+        Logger.loginfo(f"🚀 Iniciando calibración...")
         
         try:
-            # Construir comando para lanzar la calibración
+            # Mostrar primeras imágenes
+            Logger.loginfo("📋 Primeras 5 imágenes:")
+            for i, img in enumerate(images[:5]):
+                Logger.loginfo(f"   {i+1}. {os.path.basename(img)}")
+            
+            # Construir comando
             launch_cmd = [
                 'ros2', 'launch', 'charuco_calibrator', 'charuco_detector.launch.py',
-                f'images_folder:={self.images_folder}',
+                f'images_folder:={self.pic_folder}',
                 f'config_file:={self.temp_config}',
-                f'output_file:=camera_intrinsics.yaml',  # Nombre fijo
+                f'output_file:=camera_intrinsics.yaml',
                 'show_preview:=false'
             ]
             
             Logger.loginfo(f"📋 Ejecutando: {' '.join(launch_cmd)}")
             
-            # Ejecutar el launch file
+            # Ejecutar
             process = subprocess.Popen(
                 launch_cmd,
                 stdout=subprocess.PIPE,
@@ -118,74 +123,61 @@ class CharucoCameraCalibrationState(EventState):
                 bufsize=1
             )
             
-            # Mostrar salida en tiempo real
-            output_file = None
+            # Mostrar salida
             calibration_success = False
             generated_file = None
+            valid_detections = 0
             
             for line in process.stdout:
                 Logger.loginfo(f"[charuco_calibrator] {line.strip()}")
                 
-                # Detectar si la calibración fue exitosa
                 if "✅ CALIBRACIÓN EXITOSA" in line:
                     calibration_success = True
                 
-                # Detectar dónde se guardó el archivo
+                if "✅ Detectadas" in line and "esquinas" in line:
+                    valid_detections += 1
+                
                 if "💾 Calibración guardada en:" in line:
                     parts = line.strip().split("💾 Calibración guardada en: ")
                     if len(parts) > 1:
                         generated_file = parts[1].strip()
-                        Logger.loginfo(f"📄 Archivo generado en: {generated_file}")
             
-            # Esperar a que termine
             process.wait()
             
             if process.returncode == 0 and calibration_success:
-                Logger.loginfo("✅ Calibración completada exitosamente")
+                Logger.loginfo("✅ Calibración exitosa")
+                Logger.loginfo(f"📊 Válidas: {valid_detections}/{len(images)}")
                 
-                # Buscar el archivo generado
                 if generated_file and os.path.exists(generated_file):
-                    # Copiar/mover el archivo a la ubicación final
                     try:
-                        # Asegurar que la carpeta de destino existe
                         os.makedirs(self.calibration_output_folder, exist_ok=True)
                         
-                        # Si ya existe un archivo, hacer backup
                         if os.path.exists(self.final_output_path):
-                            backup_path = self.final_output_path.replace('.yaml', f'_backup_{int(time.time())}.yaml')
-                            shutil.move(self.final_output_path, backup_path)
-                            Logger.loginfo(f"📦 Backup creado: {backup_path}")
+                            backup = self.final_output_path.replace('.yaml', f'_backup_{int(time.time())}.yaml')
+                            shutil.move(self.final_output_path, backup)
+                            Logger.loginfo(f"📦 Backup: {backup}")
                         
-                        # Copiar el archivo generado a la ubicación final
                         shutil.copy2(generated_file, self.final_output_path)
-                        Logger.loginfo(f"✅ Calibración guardada en: {self.final_output_path}")
-                        
-                        # También guardar una copia en la carpeta de imágenes para referencia
-                        local_copy = os.path.join(self.images_folder, 'camera_intrinsics.yaml')
-                        shutil.copy2(generated_file, local_copy)
-                        Logger.loginfo(f"📄 Copia local guardada en: {local_copy}")
+                        Logger.loginfo(f"✅ Guardado en: {self.final_output_path}")
                         
                     except Exception as e:
-                        Logger.logwarn(f"⚠️ Error al copiar el archivo: {str(e)}")
-                else:
-                    Logger.logwarn("⚠️ No se encontró el archivo generado")
+                        Logger.logwarn(f"⚠️ Error al copiar: {str(e)}")
                 
                 return "done"
             else:
-                Logger.logerr(f"❌ Calibración fallida con código: {process.returncode}")
+                Logger.logerr(f"❌ Calibración fallida")
+                Logger.logerr(f"📊 Válidas: {valid_detections}/30")
                 return "failed"
                 
         except Exception as e:
-            Logger.logerr(f"❌ Error durante calibración: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            Logger.logerr(f"❌ Error: {str(e)}")
             return "failed"
             
     def on_exit(self, userdata):
-        """Limpiar archivos temporales al salir"""
+        """Limpiar archivos temporales"""
         try:
             if os.path.exists(self.temp_config):
                 os.remove(self.temp_config)
-                Logger.loginfo("🧹 Archivo de configuración temporal eliminado")
+                Logger.loginfo("🧹 Archivo temporal eliminado")
         except Exception as e:
-            Logger.logwarn(f"⚠️ Error eliminando archivo temporal: {str(e)}")
+            Logger.logwarn(f"⚠️ Error: {str(e)}")
