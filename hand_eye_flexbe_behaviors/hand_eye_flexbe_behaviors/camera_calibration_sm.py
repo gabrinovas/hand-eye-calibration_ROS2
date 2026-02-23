@@ -18,11 +18,16 @@ from hand_eye_flexbe_states.take_picture import TakePictureState
 
 '''
 Created on Tue Nov 15 2022
-@author: Luis
+@author: Gabriel
 '''
 class camera_calibrationSM(Behavior):
     '''
-    camera_calibration
+    Calibración de cámara con tablero Charuco
+    
+    Este behavior permite:
+    1. Capturar imágenes del tablero Charuco manualmente (ENTER/ESPACIO)
+    2. Calibrar la cámara automáticamente usando charuco_calibrator
+    3. Guardar los resultados en ~/drims_ws/calibrations/camera_intrinsics.yaml
     '''
 
 
@@ -42,8 +47,8 @@ class camera_calibrationSM(Behavior):
         self.add_parameter('col_count', 10)
         self.add_parameter('row_count', 14)
         self.add_parameter('camera_type', 'realsense')
-        self.add_parameter('save_file_name', 'camera_calibration.yaml')  # Cambiado a .yaml
-        self.add_parameter('output_folder', '')  # Nuevo parámetro opcional
+        self.add_parameter('save_file_name', 'camera_intrinsics.yaml')
+        self.add_parameter('output_folder', '')
 
         # references to used behaviors
 

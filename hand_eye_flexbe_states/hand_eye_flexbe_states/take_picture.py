@@ -40,15 +40,16 @@ class TakePictureState(EventState):
         
         # Determinar carpeta de guardado
         if output_folder:
+            # Si se especifica output_folder, usar ese
             self.save_pwd = output_folder
         else:
-            self.save_pwd = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
+            # Por defecto, usar la carpeta con subcarpeta 'pic'
+            base_folder = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
+            self.save_pwd = os.path.join(base_folder, 'pic')  # Importante: añadir /pic
+            self.calibration_folder = base_folder  # La carpeta padre para la calibración
         
         # Crear directorio si no existe
         os.makedirs(self.save_pwd, exist_ok=True)
-        
-        # También guardar la ruta para la calibración
-        self.calibration_folder = os.path.dirname(os.path.dirname(self.save_pwd))
         
         Logger.loginfo(f"📷 Las imágenes se guardarán en: {self.save_pwd}")
         Logger.loginfo(f"📸 Objetivo: {self.pic_num} imágenes")
@@ -189,7 +190,7 @@ class TakePictureState(EventState):
                        (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
             cv2.putText(display_image, f"⏳ FALTAN: {remaining}", 
                        (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
-            cv2.putText(display_image, f"📁 Guardando en: {os.path.basename(self.save_pwd)}", 
+            cv2.putText(display_image, f"📁 Guardando en: {os.path.basename(os.path.dirname(self.save_pwd))}/pic", 
                        (50, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             cv2.putText(display_image, "👉 ESPACIO o ENTER: Tomar foto | ESC: Cancelar", 
                        (50, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
@@ -212,7 +213,10 @@ class TakePictureState(EventState):
                 
                 # Feedback visual
                 feedback = self.color_image.copy()
-                cv2.rectangle(feedback, (h//4, w//4), (3*h//4, 3*w//4), (0, 255, 0), -1)
+                # Fondo verde semitransparente
+                overlay = feedback.copy()
+                cv2.rectangle(overlay, (h//4, w//4), (3*h//4, 3*w//4), (0, 255, 0), -1)
+                cv2.addWeighted(overlay, 0.3, feedback, 0.7, 0, feedback)
                 cv2.putText(feedback, f"¡FOTO {self.images_taken}/{self.pic_num} GUARDADA!", 
                            (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
                 cv2.imshow(self.window_name, feedback)
