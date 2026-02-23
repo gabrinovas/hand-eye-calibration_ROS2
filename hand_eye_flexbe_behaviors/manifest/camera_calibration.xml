@@ -16,34 +16,36 @@
 	<!-- Available Parameters -->
 	<params>
 
-		<param type="numeric" name="pic_num" default="30" label="pic_num" hint="Sets the pic_num">
+		<param type="numeric" name="pic_num" default="30" label="pic_num" hint="Número de imágenes a capturar">
 			<min value="0" />
 			<max value="50" />
 		</param>
 
-		<param type="numeric" name="square_size" default="0.0200" label="square_size" hint="Sets the square_size">
+		<param type="numeric" name="square_size" default="0.0200" label="square_size" hint="Tamaño del cuadrado en metros">
 			<min value="0" />
 			<max value="1" />
 		</param>
 
-		<param type="numeric" name="marker_size" default="0.0150" label="marker_size" hint="Sets the marker_size">
+		<param type="numeric" name="marker_size" default="0.0150" label="marker_size" hint="Tamaño del marcador en metros">
 			<min value="0" />
 			<max value="1" />
 		</param>
 
-		<param type="numeric" name="col_count" default="10" label="col_count" hint="Sets the col_count">
+		<param type="numeric" name="col_count" default="10" label="col_count" hint="Número de columnas del tablero">
 			<min value="0" />
 			<max value="100" />
 		</param>
 
-		<param type="numeric" name="row_count" default="14" label="row_count" hint="Sets the row_count">
+		<param type="numeric" name="row_count" default="14" label="row_count" hint="Número de filas del tablero">
 			<min value="0" />
 			<max value="100" />
 		</param>
 
-		<param type="text" name="camera_type" default="realsense" label="camera_type" hint="Sets the camera_type" />
+		<param type="text" name="camera_type" default="realsense" label="camera_type" hint="Tipo de cámara: realsense o usb" />
 
-		<param type="text" name="save_file_name" default="camera_calibration.ini" label="save_file_name" hint="Sets the save_file_name" />
+		<param type="text" name="save_file_name" default="camera_calibration.yaml" label="save_file_name" hint="Nombre del archivo de calibración (formato YAML)" />
+
+		<param type="text" name="output_folder" default="" label="output_folder" hint="Carpeta para guardar imágenes (dejar vacío para usar la de charuco_calibrator)" />
 
 	</params>
 

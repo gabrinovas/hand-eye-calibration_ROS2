@@ -11,9 +11,11 @@ from ament_index_python.packages import get_package_share_directory
 class TakePictureState(EventState):
     """
     Captura imágenes usando cámara RealSense para calibración.
+    Las imágenes se guardan en la carpeta que usa charuco_calibrator.
     
     -- pic_num          int     Número TOTAL de imágenes a capturar (ej: 30)
     -- camera_type      str     Tipo de cámara ('realsense' o 'usb')
+    -- output_folder    str     Carpeta donde guardar las imágenes (opcional)
     
     COMPORTAMIENTO:
     1. Al iniciar: BORRA automáticamente todas las imágenes existentes
@@ -24,7 +26,7 @@ class TakePictureState(EventState):
     <= failed                   Error o cancelado por usuario (ESC)
     """
     
-    def __init__(self, pic_num, camera_type):
+    def __init__(self, pic_num, camera_type, output_folder=None):
         super(TakePictureState, self).__init__(outcomes=['done', 'failed'])
         
         self.pic_num = pic_num
@@ -35,24 +37,36 @@ class TakePictureState(EventState):
         self.window_created = False  # Control para crear ventana SOLO UNA VEZ
         self.window_name = 'CALIBRACIÓN - Toma manual de fotos'
         
-        # Configurar ruta de guardado
-        try:
-            self.save_pwd = get_package_share_directory('charuco_detector') + '/config/camera_calibration/pic/'
-        except:
-            self.save_pwd = os.path.expanduser('~/static/drims2_ws/install/charuco_detector/share/charuco_detector/config/camera_calibration/pic/')
+        # Determinar carpeta de guardado
+        if output_folder:
+            # Si se especifica output_folder, usar ese
+            self.save_pwd = output_folder
+        else:
+            # Por defecto, usar la carpeta del paquete charuco_calibrator
+            # try:
+            #     # Intentar obtener la ruta del paquete charuco_calibrator
+            #     charuco_share = get_package_share_directory('charuco_calibrator')
+            #     self.save_pwd = os.path.join(charuco_share, 'config', 'camera_calibration', 'pic')
+            # except:
+                # Fallback: usar carpeta en el home
+            self.save_pwd = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
         
         # Crear directorio si no existe
         os.makedirs(self.save_pwd, exist_ok=True)
         
+        # También guardar la ruta para la calibración (carpeta padre)
+        self.calibration_folder = os.path.dirname(os.path.dirname(self.save_pwd))
+        
         Logger.loginfo(f"📷 Las imágenes se guardarán en: {self.save_pwd}")
         Logger.loginfo(f"📸 Objetivo: {self.pic_num} imágenes")
+        Logger.loginfo(f"⚙️ Carpeta de calibración: {self.calibration_folder}")
         
     def on_start(self):
         """Inicializar: LIMPIAR TODO y preparar cámara"""
         
         # ===== 1. LIMPIEZA AUTOMÁTICA: BORRAR TODAS LAS FOTOS PREVIAS =====
         try:
-            old_images = glob.glob(self.save_pwd + 'camera-pic-of-charucoboard-*.jpg')
+            old_images = glob.glob(os.path.join(self.save_pwd, '*.jpg'))
             if old_images:
                 Logger.loginfo(f"🧹 Limpiando {len(old_images)} imágenes de ejecuciones anteriores...")
                 for i, img in enumerate(old_images):
@@ -140,8 +154,10 @@ class TakePictureState(EventState):
                        (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
             cv2.putText(display_image, f"⏳ FALTAN: {remaining}", 
                        (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+            cv2.putText(display_image, f"📁 Guardando en: {os.path.basename(os.path.dirname(self.save_pwd))}/pic", 
+                       (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
             cv2.putText(display_image, "👉 ENTER: Tomar foto | ESC: Cancelar", 
-                       (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                       (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Actualizar la imagen en la ventana existente (NO crear nueva)
             cv2.imshow(self.window_name, display_image)
@@ -151,7 +167,7 @@ class TakePictureState(EventState):
             if key == 13:  # ENTER - Tú decides tomar foto
                 
                 # Generar nombre secuencial (siempre desde 1 porque limpiamos al inicio)
-                filename = f"{self.save_pwd}camera-pic-of-charucoboard-{self.images_taken + 1:02d}.jpg"
+                filename = os.path.join(self.save_pwd, f"camera-pic-of-charucoboard-{self.images_taken + 1:02d}.jpg")
                 
                 # Guardar imagen
                 cv2.imwrite(filename, self.color_image)
@@ -162,7 +178,7 @@ class TakePictureState(EventState):
                 # Feedback visual rápido (usando la MISMA ventana)
                 feedback = self.color_image.copy()
                 cv2.putText(feedback, f"¡FOTO {self.images_taken}/{self.pic_num} GUARDADA!", 
-                           (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
+                           (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
                 cv2.imshow(self.window_name, feedback)
                 cv2.waitKey(500)  # Mostrar confirmación por medio segundo
                 
@@ -216,20 +232,17 @@ class TakePictureState(EventState):
             # Detener pipeline de RealSense de forma segura
             if hasattr(self, 'pipeline') and self.pipeline is not None:
                 try:
-                    # Verificar si el pipeline está realmente activo antes de detener
-                    # Un simple try-except es suficiente
                     self.pipeline.stop()
                     Logger.loginfo("🛑 Pipeline de RealSense detenido")
                 except RuntimeError as e:
                     if "stop() cannot be called before start()" in str(e):
-                        # Esto es normal si ya estaba detenido
                         Logger.loginfo("ℹ️ Pipeline de RealSense ya estaba detenido")
                     else:
                         Logger.logwarn(f"⚠️ Error al detener pipeline: {str(e)}")
                 except Exception as e:
                     Logger.logwarn(f"⚠️ Error inesperado al detener pipeline: {str(e)}")
                 finally:
-                    self.pipeline = None  # Marcar como None para no volver a intentar
+                    self.pipeline = None
             
             # Liberar cámara USB si existe
             if hasattr(self, 'capture') and self.capture is not None:

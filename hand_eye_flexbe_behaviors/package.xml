@@ -22,6 +22,8 @@
     <buildtool_depend>ament_cmake</buildtool_depend>
     <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+    <depend>charuco_calibrator</depend>
+
     <export>
         <flexbe_behaviors />
         <build_type>ament_cmake</build_type>

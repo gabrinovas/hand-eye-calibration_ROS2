@@ -42,7 +42,8 @@ class camera_calibrationSM(Behavior):
         self.add_parameter('col_count', 10)
         self.add_parameter('row_count', 14)
         self.add_parameter('camera_type', 'realsense')
-        self.add_parameter('save_file_name', 'camera_calibration.ini')
+        self.add_parameter('save_file_name', 'camera_calibration.yaml')  # Cambiado a .yaml
+        self.add_parameter('output_folder', '')  # Nuevo parámetro opcional
 
         # references to used behaviors
 
@@ -68,13 +69,20 @@ class camera_calibrationSM(Behavior):
         with _state_machine:
             # x:149 y:88
             OperatableStateMachine.add('take_camera_cali_pic',
-                                        TakePictureState(pic_num=self.pic_num, camera_type=self.camera_type),
+                                        TakePictureState(pic_num=self.pic_num, 
+                                                       camera_type=self.camera_type,
+                                                       output_folder=self.output_folder),
                                         transitions={'done': 'camera_calibration', 'failed': 'failed'},
                                         autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
             # x:348 y:87
             OperatableStateMachine.add('camera_calibration',
-                                        CharucoCameraCalibrationState(square_size=self.square_size, marker_size=self.marker_size, col_count=self.col_count, row_count=self.row_count, save_file_name=self.save_file_name),
+                                        CharucoCameraCalibrationState(square_size=self.square_size, 
+                                                                     marker_size=self.marker_size, 
+                                                                     col_count=self.col_count, 
+                                                                     row_count=self.row_count, 
+                                                                     save_file_name=self.save_file_name,
+                                                                     images_folder=self.output_folder),
                                         transitions={'done': 'finished', 'failed': 'failed'},
                                         autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
