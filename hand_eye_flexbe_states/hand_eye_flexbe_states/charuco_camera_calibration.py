@@ -1,248 +1,196 @@
 #!/usr/bin/env python3
 from flexbe_core import EventState, Logger
-import time
-import numpy
 import cv2
-from cv2 import aruco
-import pickle
-import glob, os
-import configparser
-from sensor_msgs.msg import CameraInfo
-from ament_index_python.packages import get_package_share_directory
-
-# ==================== PARCHE DE COMPATIBILIDAD PARA OPENCV 4.11.0 ====================
-def create_charuco_board(col_count, row_count, square_length, marker_length, dictionary):
-    """
-    Función unificada para crear CharucoBoard compatible con TODAS las versiones de OpenCV
-    """
-    try:
-        # OpenCV 4.11.0 - Usa 'size' como parámetro
-        board = aruco.CharucoBoard(
-            size=(col_count, row_count),
-            squareLength=square_length,
-            markerLength=marker_length,
-            dictionary=dictionary
-        )
-        Logger.loginfo("✅ Usando API OpenCV 4.11.0 (con parámetro 'size')")
-        return board
-    except TypeError as e:
-        try:
-            # OpenCV 4.8+ - Usa squaresX, squaresY
-            board = aruco.CharucoBoard(
-                squaresX=col_count,
-                squaresY=row_count,
-                squareLength=square_length,
-                markerLength=marker_length,
-                dictionary=dictionary
-            )
-            Logger.loginfo("✅ Usando API OpenCV 4.8+ (con squaresX, squaresY)")
-            return board
-        except TypeError:
-            # OpenCV < 4.8 - Usa CharucoBoard_create
-            Logger.loginfo("✅ Usando API OpenCV antigua (CharucoBoard_create)")
-            return aruco.CharucoBoard_create(
-                squaresX=col_count,
-                squaresY=row_count,
-                squareLength=square_length,
-                markerLength=marker_length,
-                dictionary=dictionary
-            )
-
-def get_predefined_dictionary(dict_id):
-    """
-    Función unificada para obtener diccionario compatible con TODAS las versiones
-    """
-    try:
-        # OpenCV 4.8+
-        return aruco.getPredefinedDictionary(dict_id)
-    except AttributeError:
-        try:
-            # OpenCV < 4.8
-            return aruco.Dictionary_get(dict_id)
-        except AttributeError:
-            # Último recurso: usar DICT_4X4_100 (valor 3)
-            Logger.logwarn("⚠️ Usando diccionario por defecto DICT_4X4_100")
-            return aruco.getPredefinedDictionary(aruco.DICT_4X4_100)
-# ====================================================================================
+import cv2.aruco as aruco
+import numpy as np
+import glob
+import os
+import yaml
+import time
 
 class CharucoCameraCalibrationState(EventState):
     """
     Procesa imágenes de charuco board para calibrar la cámara.
+    Versión para OpenCV 4.5.4 (ROS2 Humble)
     
     <= done                                    Calibración exitosa
     <= failed                                   Error en calibración
     """
     
-    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name):
+    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None):
         """Constructor"""
         super(CharucoCameraCalibrationState, self).__init__(outcomes=['done', 'failed'])
-        self.camera_calibration_file = save_file_name
         
-        self.CHARUCOBOARD_COLCOUNT = col_count
-        self.CHARUCOBOARD_ROWCOUNT = row_count    
+        self.square_size = square_size
+        self.marker_size = marker_size
+        self.col_count = col_count
+        self.row_count = row_count
+        self.save_file_name = save_file_name
         
-        # Obtener diccionario de forma compatible
-        try:
-            self.ARUCO_DICT = get_predefined_dictionary(aruco.DICT_4X4_100)
-        except:
-            Logger.logwarn("⚠️ Usando DICT_4X4_100 por defecto")
-            self.ARUCO_DICT = aruco.DICT_4X4_100
+        # Determinar carpeta de imágenes
+        if images_folder:
+            self.images_folder = images_folder
+        else:
+            self.images_folder = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
         
-        self.squareLength = square_size
-        self.markerLength = marker_size
-
-        # Crear CharucoBoard de forma compatible con TODAS las versiones
-        self.CHARUCO_BOARD = create_charuco_board(
-            col_count=self.CHARUCOBOARD_COLCOUNT,
-            row_count=self.CHARUCOBOARD_ROWCOUNT,
-            square_length=self.squareLength,
-            marker_length=self.markerLength,
-            dictionary=self.ARUCO_DICT
+        self.pic_folder = self.images_folder
+        self.calibration_output_folder = os.path.expanduser('~/drims_ws/calibrations')
+        self.final_output_path = os.path.join(self.calibration_output_folder, 'camera_intrinsics.yaml')
+        
+        # API de OpenCV 4.5.4 (la que funciona con Charuco)
+        self.dictionary = aruco.Dictionary_get(aruco.DICT_4X4_100)
+        self.board = aruco.CharucoBoard_create(
+            self.col_count, self.row_count,
+            self.square_size, self.marker_size,
+            self.dictionary
         )
-
-        # Create the arrays and variables we'll use to store info like corners and IDs from images processed
-        self.corners_all = [] # Corners discovered in all images processed
-        self.ids_all = [] # Aruco ids corresponding to corners discovered
-        self.image_size = None # Determined at runtime
         
-        # Obtener ruta de imágenes
-        try:
-            self.save_pwd = get_package_share_directory('charuco_detector') + '/config/camera_calibration/'
-        except:
-            self.save_pwd = os.path.expanduser('~/static/drims2_ws/install/charuco_detector/share/charuco_detector/config/camera_calibration/')
+        Logger.loginfo(f"📂 Carpeta de imágenes: {self.images_folder}")
+        Logger.loginfo(f"📸 Buscando imágenes en: {self.pic_folder}")
+        Logger.loginfo(f"📁 Archivo final de calibración: {self.final_output_path}")
+        Logger.loginfo(f"📋 OpenCV versión: {cv2.__version__}")
+        Logger.loginfo(f"📏 Tablero: {self.col_count}x{self.row_count}, square={self.square_size}m, marker={self.marker_size}m")
+    
+    def save_intrinsic_matrix_yaml(self, camera_matrix, dist_coeffs, image_size, robot_id=1, robot_name="ur5e", robot_ip="192.168.1.101"):
+        """
+        Guarda la matriz intrínseca en el formato YAML específico.
+        """
+        # 1. Preparar las listas planas
+        K_flat = camera_matrix.flatten().tolist()
+        d_flat = dist_coeffs.flatten().tolist()
         
-        # Buscar imágenes
-        self.pic_path = self.save_pwd + 'pic/'
-        self.images = glob.glob(self.pic_path + 'camera-pic-of-charucoboard-*.jpg')
+        # 2. Estructura de datos
+        intrinsic_data = {
+            'camera': {
+                robot_id: {
+                    'K': K_flat,
+                    'd': d_flat,
+                }
+            }
+        }
         
-        Logger.loginfo(f"📂 Buscando imágenes en: {self.pic_path}")
-        Logger.loginfo(f"📸 Encontradas {len(self.images)} imágenes")
-
+        intrinsic_path = os.path.join(self.calibration_output_folder, 'intrinsic_matrix.yaml')
+        with open(intrinsic_path, 'w') as f:
+            yaml.dump(intrinsic_data, f, default_flow_style=None, width=float('inf'), sort_keys=False)
+        
+        print(f"💾 Guardado correctamente en: {intrinsic_path}")
+    
     def on_start(self):
         pass
     
     def execute(self, userdata):
-        if not self.images:
-            Logger.logerr(f"❌ No se encontraron imágenes en: {self.pic_path}")
-            Logger.loginfo("💡 Asegúrate de haber capturado imágenes primero con el estado 'take_camera_cali_pic'")
-            return "failed"
-            
-        Logger.loginfo(f"🔍 Procesando {len(self.images)} imágenes para calibración...")
+        # Verificar que existen imágenes
+        images = glob.glob(os.path.join(self.pic_folder, '*.jpg'))
+        images.extend(glob.glob(os.path.join(self.pic_folder, '*.png')))
         
-        for i, iname in enumerate(self.images):
-            Logger.loginfo(f"📷 Procesando imagen {i+1}/{len(self.images)}: {os.path.basename(iname)}")
-            
-            # Open the image
-            img = cv2.imread(iname)
+        if not images:
+            Logger.logerr(f"❌ No se encontraron imágenes en: {self.pic_folder}")
+            return "failed"
+        
+        Logger.loginfo(f"🔍 Procesando {len(images)} imágenes...")
+        
+        all_corners = []
+        all_ids = []
+        image_size = None
+        valid_count = 0
+        
+        for img_path in images:
+            img = cv2.imread(img_path)
             if img is None:
-                Logger.logwarn(f"⚠️ No se pudo leer la imagen: {iname}")
                 continue
-                
-            # Grayscale the image
+            
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-            # Find aruco markers in the query image
-            corners, ids, _ = aruco.detectMarkers(
-                    image=gray,
-                    dictionary=self.ARUCO_DICT)
-
-            # Skip if no markers found
-            if ids is None or len(ids) == 0:
-                Logger.logwarn(f"⚠️ No se encontraron marcadores en: {os.path.basename(iname)}")
-                continue
-
-            # Get charuco corners and ids from detected aruco markers
-            try:
-                response, charuco_corners, charuco_ids = aruco.interpolateCornersCharuco(
-                        markerCorners=corners,
-                        markerIds=ids,
-                        image=gray,
-                        board=self.CHARUCO_BOARD)
-            except Exception as e:
-                Logger.logwarn(f"⚠️ Error interpolando corners: {str(e)}")
-                continue
-
-            # If a Charuco board was found, let's collect image/corner points
-            # Requiring at least 20 squares
-            if response is not None and response > 20:
-                # Add these corners and ids to our calibration arrays
-                self.corners_all.append(charuco_corners)
-                self.ids_all.append(charuco_ids)
-                Logger.loginfo(f"   ✅ Board detectado con {response} esquinas")
-
-                # If our image size is unknown, set it now
-                if not self.image_size:
-                    self.image_size = gray.shape[::-1]
+            
+            if image_size is None:
+                image_size = gray.shape[::-1]
+            
+            # Detectar marcadores ArUco
+            corners, ids, _ = aruco.detectMarkers(gray, self.dictionary)
+            
+            if ids is not None and len(ids) > 10:
+                # Interpolar esquinas Charuco
+                ret, charuco_corners, charuco_ids = aruco.interpolateCornersCharuco(
+                    corners, ids, gray, self.board
+                )
+                
+                if charuco_corners is not None and len(charuco_corners) > 4:
+                    all_corners.append(charuco_corners)
+                    all_ids.append(charuco_ids)
+                    valid_count += 1
+                    Logger.loginfo(f"✅ {os.path.basename(img_path)}: {len(charuco_corners)} esquinas")
+                else:
+                    Logger.loginfo(f"⚠️ {os.path.basename(img_path)}: pocas esquinas ({len(charuco_corners) if charuco_corners is not None else 0})")
             else:
-                Logger.logwarn(f"⚠️ No se pudo detectar charuco board en: {os.path.basename(iname)} (response={response})")
-
-        # Destroy any open CV windows
-        cv2.destroyAllWindows()
+                Logger.loginfo(f"❌ {os.path.basename(img_path)}: pocos marcadores ({len(ids) if ids is not None else 0})")
         
-        # Make sure we were able to calibrate on at least one charucoboard
-        if not self.image_size or len(self.corners_all) < 3:
-            Logger.logerr(f"❌ Calibración fallida. Solo se detectaron {len(self.corners_all)} boards válidos (mínimo 3)")
+        if valid_count < 3:
+            Logger.logerr(f"❌ Solo {valid_count} imágenes válidas (mínimo 3)")
             return "failed"
-
-        # Now that we've seen all of our images, perform the camera calibration
-        Logger.loginfo(f"📊 Calibrando cámara con {len(self.corners_all)} boards válidos...")
+        
+        Logger.loginfo(f"📊 Calibrando con {valid_count} imágenes válidas...")
         
         try:
-            calibration, cameraMatrix, distCoeffs, rvecs, tvecs = aruco.calibrateCameraCharuco(
-                    charucoCorners=self.corners_all,
-                    charucoIds=self.ids_all,
-                    board=self.CHARUCO_BOARD,
-                    imageSize=self.image_size,
-                    cameraMatrix=None,
-                    distCoeffs=None)
-
-            print("\n" + "="*50)
-            print("✅ CALIBRACIÓN EXITOSA")
-            print("="*50)
-            print("\n📷 Matriz de Cámara (Intrínsecos):")
-            print(cameraMatrix)
-            print("\n📏 Coeficientes de Distorsión:")
-            print(distCoeffs)
-            print("="*50 + "\n")
+            # Calibrar cámara usando Charuco
+            ret, camera_matrix, dist_coeffs, rvecs, tvecs = aruco.calibrateCameraCharuco(
+                charucoCorners=all_corners,
+                charucoIds=all_ids,
+                board=self.board,
+                imageSize=image_size,
+                cameraMatrix=None,
+                distCoeffs=None
+            )
             
-            # Guardar resultados
-            config = configparser.ConfigParser()
-            config.optionxform = str 
+            Logger.loginfo("\n" + "="*50)
+            Logger.loginfo("✅ CALIBRACIÓN EXITOSA")
+            Logger.loginfo("="*50)
+            Logger.loginfo(f"📏 Error de reproyección: {ret:.6f}")
+            Logger.loginfo(f"\n📷 Matriz de cámara:\n{camera_matrix}")
+            Logger.loginfo(f"\n📐 Coeficientes de distorsión:\n{dist_coeffs.reshape(-1)}")
             
-            config.add_section("Distortion")
-            config.set("Distortion", "k1",  str(distCoeffs[0][0]))
-            config.set("Distortion", "k2",  str(distCoeffs[0][1]))
-            config.set("Distortion", "t1",  str(distCoeffs[0][2]))
-            config.set("Distortion", "t2",  str(distCoeffs[0][3]))
-            config.set("Distortion", "k3",  str(distCoeffs[0][4]))
+            # Guardar calibración estándar
+            calibration_data = {
+                'camera_matrix': camera_matrix.tolist(),
+                'distortion_coefficients': dist_coeffs.reshape(-1).tolist(),
+                'image_width': image_size[0],
+                'image_height': image_size[1],
+                'reprojection_error': float(ret),
+                'calibration_date': time.time(),
+                'charuco_config': {
+                    'rows': self.row_count,
+                    'cols': self.col_count,
+                    'square_length': self.square_size,
+                    'marker_length': self.marker_size,
+                    'dictionary': 'DICT_4X4_100'
+                }
+            }
             
-            config.add_section("Intrinsic")
-            config.set("Intrinsic", "0_0", str(cameraMatrix[0][0]))
-            config.set("Intrinsic", "0_1", str(cameraMatrix[0][1]))
-            config.set("Intrinsic", "0_2", str(cameraMatrix[0][2]))
-            config.set("Intrinsic", "1_0", str(cameraMatrix[1][0]))
-            config.set("Intrinsic", "1_1", str(cameraMatrix[1][1]))
-            config.set("Intrinsic", "1_2", str(cameraMatrix[1][2]))
-            config.set("Intrinsic", "2_0", str(cameraMatrix[2][0]))
-            config.set("Intrinsic", "2_1", str(cameraMatrix[2][1]))
-            config.set("Intrinsic", "2_2", str(cameraMatrix[2][2]))
+            # Asegurar que la carpeta existe
+            os.makedirs(self.calibration_output_folder, exist_ok=True)
             
-            # Asegurar que el directorio existe
-            os.makedirs(self.save_pwd, exist_ok=True)
+            # Guardar archivo YAML estándar
+            with open(self.final_output_path, 'w') as f:
+                yaml.dump(calibration_data, f, default_flow_style=None, width=float('inf'))
             
-            output_file = self.save_pwd + self.camera_calibration_file
-            with open(output_file, 'w') as file:
-                config.write(file)
-
-            Logger.loginfo(f'💾 Archivo guardado: {output_file}')
+            Logger.loginfo(f"💾 Calibración estándar guardada en: {self.final_output_path}")
             
-            return 'done'
+            # Guardar intrinsic matrix en formato específico
+            self.save_intrinsic_matrix_yaml(
+                camera_matrix=camera_matrix,
+                dist_coeffs=dist_coeffs,
+                image_size=image_size,
+                robot_id=1,
+                robot_name="ur5e",
+                robot_ip="192.168.1.101"
+            )
+            
+            return "done"
             
         except Exception as e:
-            Logger.logerr(f"❌ Calibración fallida: {str(e)}")
+            Logger.logerr(f"❌ Error durante calibración: {str(e)}")
             import traceback
             traceback.print_exc()
             return "failed"
-            
-    def on_enter(self, userdata):
+    
+    def on_exit(self, userdata):
+        """Limpiar al salir"""
         pass
