@@ -37,6 +37,7 @@ class TakePictureState(EventState):
         self.window_created = False
         self.window_name = 'CALIBRACIÓN - Toma manual de fotos'
         self.camera_initialized = False
+        self.last_photo_taken = False
         
         if output_folder:
             self.save_pwd = output_folder
@@ -121,6 +122,11 @@ class TakePictureState(EventState):
     def execute(self, userdata):
         """Bucle principal"""
         
+        # Si ya se tomó la última foto, limpiar y salir
+        if self.last_photo_taken:
+            self._cleanup()
+            return 'done'
+        
         if not self.camera_initialized:
             Logger.logerr("❌ Cámara no disponible. Abortando.")
             return 'failed'
@@ -199,14 +205,21 @@ class TakePictureState(EventState):
                 if self.images_taken >= self.pic_num:
                     Logger.loginfo(f"🎯 ¡OBJETIVO ALCANZADO! {self.pic_num} imágenes")
                     Logger.loginfo("🔄 Pasando a calibración...")
-                    cv2.destroyWindow(self.window_name)
-                    self.window_created = False
-                    return 'done'
+                    # Marcar que ya se tomó la última foto
+                    self.last_photo_taken = True
+                    # Cerrar ventana inmediatamente
+                    if self.window_created:
+                        cv2.destroyWindow(self.window_name)
+                        self.window_created = False
+                    # No devolvemos 'done' aquí, lo haremos en la próxima iteración
+                    # después de limpiar recursos
+                    return  # Salir de execute sin devolver outcome
                     
             elif key == 27:  # ESC
                 Logger.logwarn("⏹️ Captura cancelada")
                 cv2.destroyWindow(self.window_name)
                 self.window_created = False
+                self._cleanup()
                 return 'failed'
             
         except Exception as e:
@@ -214,6 +227,7 @@ class TakePictureState(EventState):
             if self.window_created:
                 cv2.destroyWindow(self.window_name)
                 self.window_created = False
+            self._cleanup()
             return 'failed'
         
         return
@@ -240,7 +254,7 @@ class TakePictureState(EventState):
                     self.pipeline.stop()
                     Logger.loginfo("🛑 RealSense detenido")
                 except Exception as e:
-                    Logger.logwarn(f"⚠️ Error: {str(e)}")
+                    Logger.logwarn(f"⚠️ Error al detener RealSense: {str(e)}")
                 finally:
                     self.pipeline = None
             
@@ -249,7 +263,7 @@ class TakePictureState(EventState):
                     self.capture.release()
                     Logger.loginfo("🛑 Cámara USB liberada")
                 except Exception as e:
-                    Logger.logwarn(f"⚠️ Error: {str(e)}")
+                    Logger.logwarn(f"⚠️ Error al liberar cámara USB: {str(e)}")
                 finally:
                     self.capture = None
                 
