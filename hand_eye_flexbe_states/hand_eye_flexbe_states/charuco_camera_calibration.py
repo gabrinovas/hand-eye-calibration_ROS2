@@ -68,9 +68,9 @@ class CharucoCameraCalibrationState(EventState):
     output_file: "camera_intrinsics.yaml"
     image_width: 1920
     image_height: 1080
-    min_markers: 4
-    min_corners: 10
-    min_valid_images: 5
+    min_markers: 3
+    min_corners: 4
+    min_valid_images: 3
 """
         try:
             with open(self.temp_config, 'w') as f:
@@ -84,18 +84,7 @@ class CharucoCameraCalibrationState(EventState):
         pass
     
     def execute(self, userdata):
-        # Verificar que la carpeta de imágenes existe
-        if not os.path.exists(self.pic_folder):
-            Logger.logerr(f"❌ La carpeta no existe: {self.pic_folder}")
-            return "failed"
-        
-        # Asegurar que la carpeta de salida existe
-        os.makedirs(self.calibration_output_folder, exist_ok=True)
-        
-        Logger.loginfo(f"📸 Leyendo imágenes de: {os.path.abspath(self.pic_folder)}")
-        Logger.loginfo(f"💾 Guardando calibración en: {os.path.abspath(self.calibration_output_folder)}")
-    
-    # Verificar que existen imágenes
+        # Verificar que existen imágenes
         images = glob.glob(os.path.join(self.pic_folder, '*.jpg'))
         images.extend(glob.glob(os.path.join(self.pic_folder, '*.png')))
         
@@ -104,132 +93,123 @@ class CharucoCameraCalibrationState(EventState):
             return "failed"
         
         Logger.loginfo(f"🔍 Encontradas {len(images)} imágenes")
+        Logger.loginfo(f"📸 Leyendo imágenes de: {self.pic_folder}")
+        Logger.loginfo(f"💾 Guardando calibración en: {self.calibration_output_folder}")
         
-        # ===== DIAGNÓSTICO VISUAL =====
+        # ===== DIAGNÓSTICO MEJORADO =====
         Logger.loginfo("🔬 INICIANDO DIAGNÓSTICO DE DETECCIÓN...")
         
-        # Probar diferentes diccionarios
+        # Probar diccionarios
         dicts_to_test = [
             ("DICT_4X4_100", aruco.DICT_4X4_100),
+            ("DICT_4X4_50", aruco.DICT_4X4_50),
+            ("DICT_4X4_250", aruco.DICT_4X4_250),
             ("DICT_4X4_1000", aruco.DICT_4X4_1000),
-            ("DICT_5X5_100", aruco.DICT_5X5_100),
-            ("DICT_6X6_100", aruco.DICT_6X6_100),
         ]
         
         best_dict = None
         best_count = 0
         
-        # Crear ventana para visualización
-        cv2.namedWindow('Diagnóstico Charuco', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Diagnóstico Charuco', 1280, 720)
+        # Parámetros de detección mejorados
+        detector_params = aruco.DetectorParameters()
+        detector_params.adaptiveThreshWinSizeMin = 3
+        detector_params.adaptiveThreshWinSizeMax = 23
+        detector_params.adaptiveThreshWinSizeStep = 10
+        detector_params.minMarkerPerimeterRate = 0.03
+        detector_params.maxMarkerPerimeterRate = 4.0
+        detector_params.polygonalApproxAccuracyRate = 0.05
+        detector_params.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
         
         for dict_name, dict_id in dicts_to_test:
             Logger.loginfo(f"\n📋 Probando diccionario: {dict_name}")
             
             dictionary = aruco.getPredefinedDictionary(dict_id)
             
-            # Crear board
+            # Crear board con la API que funciona
             try:
-                board = aruco.CharucoBoard((self.col_count, self.row_count), 
-                                          self.square_size, self.marker_size, dictionary)
-            except:
-                try:
-                    board = aruco.CharucoBoard(self.col_count, self.row_count, 
-                                              self.square_size, self.marker_size, dictionary)
-                except:
-                    board = aruco.CharucoBoard_create(self.col_count, self.row_count, 
-                                                     self.square_size, self.marker_size, dictionary)
-            
-            total_markers = 0
-            total_charuco = 0
-            valid_images = 0
-            
-            # Probar con las primeras 5 imágenes
-            for img_path in images[:5]:
-                img = cv2.imread(img_path)
-                if img is None:
-                    continue
-                    
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                board = aruco.CharucoBoard(
+                    (self.col_count, self.row_count),
+                    self.square_size,
+                    self.marker_size,
+                    dictionary
+                )
                 
-                # Detectar marcadores
-                corners, ids, _ = aruco.detectMarkers(gray, dictionary)
+                total_markers = 0
+                total_charuco = 0
+                valid_images = 0
                 
-                # Crear imagen de visualización
-                vis_img = img.copy()
-                
-                if ids is not None:
-                    total_markers += len(ids)
-                    
-                    # Dibujar marcadores detectados
-                    aruco.drawDetectedMarkers(vis_img, corners, ids)
-                    
-                    # Intentar interpolar Charuco
-                    try:
-                        ret, charuco_corners, charuco_ids = aruco.interpolateCornersCharuco(
-                            corners, ids, gray, board
-                        )
+                # Probar con las primeras 5 imágenes
+                for i, img_path in enumerate(images[:5]):
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        continue
                         
-                        if charuco_corners is not None and ret is not None and ret > 0:
-                            total_charuco += ret
-                            valid_images += 1
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    
+                    # Detectar marcadores con parámetros mejorados
+                    corners, ids, _ = aruco.detectMarkers(
+                        gray, 
+                        dictionary,
+                        parameters=detector_params
+                    )
+                    
+                    if ids is not None and len(ids) > 3:
+                        total_markers += len(ids)
+                        
+                        # Intentar interpolación con diferentes métodos
+                        try:
+                            # Método 1: Interpolación estándar
+                            ret, charuco_corners, charuco_ids = aruco.interpolateCornersCharuco(
+                                corners, ids, gray, board
+                            )
                             
-                            # Dibujar esquinas Charuco
-                            aruco.drawDetectedCornersCharuco(vis_img, charuco_corners, charuco_ids)
-                            
-                            cv2.putText(vis_img, f"✓ {ret} esquinas", (50, 50), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                        else:
-                            cv2.putText(vis_img, "✗ Sin esquinas Charuco", (50, 50), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    except Exception as e:
-                        cv2.putText(vis_img, f"Error: {str(e)[:20]}", (50, 50), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                else:
-                    cv2.putText(vis_img, "✗ Sin marcadores", (50, 50), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                            if charuco_corners is not None and ret is not None and ret > 0:
+                                total_charuco += ret
+                                valid_images += 1
+                                Logger.loginfo(f"   ✅ Imagen {i+1}: {ret} esquinas detectadas")
+                            else:
+                                # Método 2: Intentar con minMarkers más bajo
+                                ret, charuco_corners, charuco_ids = aruco.interpolateCornersCharuco(
+                                    corners, ids, gray, board, minMarkers=2
+                                )
+                                if charuco_corners is not None and ret is not None and ret > 0:
+                                    total_charuco += ret
+                                    valid_images += 1
+                                    Logger.loginfo(f"   ⚠️ Imagen {i+1}: {ret} esquinas (con minMarkers=2)")
+                                else:
+                                    Logger.loginfo(f"   ❌ Imagen {i+1}: Sin esquinas (ret={ret})")
+                        except Exception as e:
+                            Logger.loginfo(f"   ⚠️ Error en imagen {i+1}: {str(e)}")
+                    else:
+                        Logger.loginfo(f"   ❌ Imagen {i+1}: Pocos marcadores ({len(ids) if ids is not None else 0})")
                 
-                # Añadir información
-                cv2.putText(vis_img, f"Diccionario: {dict_name}", (50, 100), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(vis_img, f"Imagen: {os.path.basename(img_path)}", (50, 150), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                Logger.loginfo(f"   📊 Resultados: {valid_images}/5 válidas, {total_charuco} esquinas totales, {total_markers} marcadores")
                 
-                # Mostrar
-                cv2.imshow('Diagnóstico Charuco', vis_img)
-                key = cv2.waitKey(2000) & 0xFF  # Mostrar cada imagen 2 segundos
-                
-                if key == 27:  # ESC para cancelar
-                    cv2.destroyAllWindows()
-                    return "failed"
-            
-            Logger.loginfo(f"   Marcadores: {total_markers}, Esquinas: {total_charuco}, Válidas: {valid_images}/5")
-            
-            if valid_images > best_count:
-                best_count = valid_images
-                best_dict = dict_name
-        
-        cv2.destroyAllWindows()
+                if valid_images > best_count:
+                    best_count = valid_images
+                    best_dict = dict_name
+                    
+            except Exception as e:
+                Logger.loginfo(f"   ❌ Error creando board: {str(e)}")
         
         Logger.loginfo("\n" + "="*60)
         Logger.loginfo(f"🎯 MEJOR DICCIONARIO: {best_dict} con {best_count}/5 imágenes válidas")
         Logger.loginfo("="*60)
         
         if best_count == 0:
-            Logger.logerr("❌ NO SE DETECTÓ NINGÚN MARCADOR")
+            Logger.logerr("❌ NO SE DETECTARON ESQUINAS CHARUCO")
             Logger.loginfo("\nPOSIBLES CAUSAS:")
-            Logger.loginfo("1. El tablero impreso no tiene suficiente contraste")
-            Logger.loginfo("2. La iluminación es demasiado baja o hay reflejos")
-            Logger.loginfo("3. El tablero está demasiado lejos (los marcadores muy pequeños)")
-            Logger.loginfo("4. El diccionario ArUco es incorrecto (prueba con DICT_4X4_50 o DICT_4X4_250)")
-            Logger.loginfo("5. La imagen está muy comprimida o borrosa")
+            Logger.loginfo("1. Las dimensiones físicas del tablero no coinciden (square_size vs marker_size)")
+            Logger.loginfo("2. El tablero está demasiado inclinado o borroso")
+            Logger.loginfo("3. La relación de aspecto de los marcadores no es la esperada")
+            Logger.loginfo("4. Prueba con square_size=0.021 o marker_size=0.014 (pequeños ajustes)")
             return "failed"
         
-        # Continuar con la calibración normal
+        # Si hay detecciones, continuar con la calibración
         Logger.loginfo(f"🚀 Iniciando calibración con {best_dict}...")
         
         try:
-            # Modificar el archivo temporal con el mejor diccionario
+            # Usar el diccionario que funcionó
             self._update_temp_config_with_dict(best_dict)
             
             launch_cmd = [
@@ -305,14 +285,13 @@ class CharucoCameraCalibrationState(EventState):
             with open(self.temp_config, 'r') as f:
                 content = f.read()
             
-            # Reemplazar el diccionario
             import re
             new_content = re.sub(r'dictionary: "DICT_\w+"', f'dictionary: "{dict_name}"', content)
             
             with open(self.temp_config, 'w') as f:
                 f.write(new_content)
             
-            Logger.loginfo(f"✅ Diccionario actualizado a {dict_name} en archivo temporal")
+            Logger.loginfo(f"✅ Diccionario actualizado a {dict_name}")
         except Exception as e:
             Logger.logwarn(f"⚠️ No se pudo actualizar diccionario: {str(e)}")
     
