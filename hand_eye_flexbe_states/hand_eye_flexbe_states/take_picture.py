@@ -38,12 +38,9 @@ class TakePictureState(EventState):
         self.window_name = 'CALIBRACIÓN - Toma manual de fotos'
         self.camera_initialized = False
         
-        # Determinar carpeta de guardado
         if output_folder:
-            # Si se especifica output_folder, usar ese
             self.save_pwd = output_folder
         else:
-            # Por defecto, usar la carpeta SIN subcarpeta pic
             self.save_pwd = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
         
         # Crear directorio si no existe
@@ -55,7 +52,6 @@ class TakePictureState(EventState):
     def on_start(self):
         """Inicializar: LIMPIAR TODO y preparar cámara"""
         
-        # Limpiar imágenes antiguas
         try:
             old_images = glob.glob(os.path.join(self.save_pwd, '*.jpg'))
             if old_images:
