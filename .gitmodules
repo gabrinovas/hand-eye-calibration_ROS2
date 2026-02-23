@@ -1,6 +1,7 @@
-[submodule "charuco_detector_ROS2"]
-	path = charuco_detector_ROS2
-	url = https://github.com/gabrinovas/charuco_detector_ROS2.git
+[submodule "charuco_calibrator"]
+	path = charuco_calibrator
+	url = https://github.com/gabrinovas/charuco_calibrator.git
+	branch = main
 [submodule "vision_visp"]
 	path = vision_visp
 	url = https://github.com/gabrinovas/vision_visp.git
