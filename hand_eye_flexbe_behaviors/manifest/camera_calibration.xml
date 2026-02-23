@@ -54,7 +54,7 @@
 
 		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="Nombre archivo" hint="Nombre del archivo de calibración (se guardará en ~/drims_ws/calibrations/)" />
 
-		<param type="text" name="output_folder" default="" label="Carpeta personalizada" hint="Carpeta para guardar imágenes (dejar vacío para usar ~/drims_ws/calibrations/camera_calib_pictures/pic/)" />
+		<param type="text" name="output_folder" default="" label="Carpeta personalizada" hint="Carpeta para guardar imágenes (dejar vacío para usar ~/drims_ws/calibrations/camera_calib_pictures/)" />
 
 	</params>
 

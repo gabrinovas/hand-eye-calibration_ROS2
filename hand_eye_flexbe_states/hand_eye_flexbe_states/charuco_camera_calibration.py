@@ -51,6 +51,30 @@ class CharucoCameraCalibrationState(EventState):
         Logger.loginfo(f"📋 OpenCV versión: {cv2.__version__}")
         Logger.loginfo(f"📏 Tablero: {self.col_count}x{self.row_count}, square={self.square_size}m, marker={self.marker_size}m")
     
+    def save_intrinsic_matrix_yaml(self, camera_matrix, dist_coeffs, image_size, robot_id=1, robot_name="ur5e", robot_ip="192.168.1.101"):
+        """
+        Guarda la matriz intrínseca en el formato YAML específico.
+        """
+        # 1. Preparar las listas planas
+        K_flat = camera_matrix.flatten().tolist()
+        d_flat = dist_coeffs.flatten().tolist()
+        
+        # 2. Estructura de datos
+        intrinsic_data = {
+            'camera': {
+                robot_id: {
+                    'K': K_flat,
+                    'd': d_flat,
+                }
+            }
+        }
+        
+        intrinsic_path = os.path.join(self.calibration_output_folder, 'intrinsic_matrix.yaml')
+        with open(intrinsic_path, 'w') as f:
+            yaml.dump(intrinsic_data, f, default_flow_style=None, width=float('inf'), sort_keys=False)
+        
+        print(f"💾 Guardado correctamente en: {intrinsic_path}")
+    
     def on_start(self):
         pass
     
@@ -123,7 +147,7 @@ class CharucoCameraCalibrationState(EventState):
             Logger.loginfo(f"\n📷 Matriz de cámara:\n{camera_matrix}")
             Logger.loginfo(f"\n📐 Coeficientes de distorsión:\n{dist_coeffs.reshape(-1)}")
             
-            # Guardar calibración
+            # Guardar calibración estándar
             calibration_data = {
                 'camera_matrix': camera_matrix.tolist(),
                 'distortion_coefficients': dist_coeffs.reshape(-1).tolist(),
@@ -143,11 +167,21 @@ class CharucoCameraCalibrationState(EventState):
             # Asegurar que la carpeta existe
             os.makedirs(self.calibration_output_folder, exist_ok=True)
             
-            # Guardar archivo YAML
+            # Guardar archivo YAML estándar
             with open(self.final_output_path, 'w') as f:
                 yaml.dump(calibration_data, f, default_flow_style=False)
             
-            Logger.loginfo(f"💾 Calibración guardada en: {self.final_output_path}")
+            Logger.loginfo(f"💾 Calibración estándar guardada en: {self.final_output_path}")
+            
+            # Guardar intrinsic matrix en formato específico
+            self.save_intrinsic_matrix_yaml(
+                camera_matrix=camera_matrix,
+                dist_coeffs=dist_coeffs,
+                image_size=image_size,
+                robot_id=1,
+                robot_name="ur5e",
+                robot_ip="192.168.1.101"
+            )
             
             return "done"
             
