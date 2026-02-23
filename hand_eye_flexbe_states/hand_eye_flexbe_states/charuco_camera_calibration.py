@@ -169,7 +169,7 @@ class CharucoCameraCalibrationState(EventState):
             
             # Guardar archivo YAML estándar
             with open(self.final_output_path, 'w') as f:
-                yaml.dump(calibration_data, f, default_flow_style=False)
+                yaml.dump(calibration_data, f, default_flow_style=None, width=float('inf'))
             
             Logger.loginfo(f"💾 Calibración estándar guardada en: {self.final_output_path}")
             
