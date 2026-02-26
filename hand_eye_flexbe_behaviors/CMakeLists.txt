@@ -16,7 +16,7 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Instalar behaviors
+# Instalar el paquete Python
 ament_python_install_package(${PROJECT_NAME})
 
 ament_package()

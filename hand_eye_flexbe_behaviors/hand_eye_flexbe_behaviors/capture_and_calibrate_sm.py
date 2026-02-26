@@ -7,7 +7,7 @@
 # Only code inside the [MANUAL] tags will be kept.        #
 ###########################################################
 
-from flexbe_core import Behavior, Autonomy, OperatableStateMachine, ConcurrencyContainer, PriorityContainer, Logger
+from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
 from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
@@ -31,6 +31,8 @@ class CaptureAndCalibrateSM(Behavior):
             Presionas ESPACIO en cada pose para capturar
     FASE 3: Procesamiento offline automático de todas las imágenes
     FASE 4: Cálculo automático de calibración con VISP
+    
+    RESULTADOS: {output_folder}/hand_eye_calibration.yaml
     """
     
     def __init__(self, node):
@@ -51,10 +53,11 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_name', 'panda')
         self.add_parameter('moveit_config_package', 'panda_moveit_config')
         
-        # Rutas fijas del proyecto
-        self.add_parameter('pictures_folder', '/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures')
-        self.add_parameter('robot_poses_folder', '/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses')
-        self.add_parameter('output_folder', '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses')
+        # Rutas del proyecto - AHORA SE USAN
+        base_calib_path = '/home/drims/drims_ws/calibrations'
+        self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
+        self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
+        self.add_parameter('output_folder', f'{base_calib_path}/extrinsic_calib_charuco_poses')
 
         # Inicializar estados
         LaunchMoveItState.initialize_ros(node)
@@ -69,8 +72,6 @@ class CaptureAndCalibrateSM(Behavior):
         
         # [/MANUAL_INIT]
 
-        # Behavior comments:
-
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
@@ -78,6 +79,7 @@ class CaptureAndCalibrateSM(Behavior):
         _state_machine.userdata.current_index = 0
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
+        _state_machine.userdata.output_folder = self.output_folder
 
         # Additional creation code can be added inside the following tags
         # [MANUAL_CREATE]
@@ -104,6 +106,7 @@ class CaptureAndCalibrateSM(Behavior):
                     tool_frame=self.tool_frame,
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
+                    output_folder=self.output_folder,
                     auto_capture=False
                 ),
                 transitions={'done': 'Process_Pairs', 'failed': 'failed'},
@@ -114,6 +117,7 @@ class CaptureAndCalibrateSM(Behavior):
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
+                    output_folder=self.output_folder,
                     eye_in_hand=self.eye_in_hand
                 ),
                 transitions={
@@ -131,7 +135,8 @@ class CaptureAndCalibrateSM(Behavior):
                     'base_h_tool': 'base_h_tool',
                     'camera_h_charuco': 'camera_h_charuco',
                     'base_h_tool_accumulated': 'base_h_tool_accumulated',
-                    'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated'
+                    'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated',
+                    'output_folder': 'output_folder'
                 })
 
             # ESTADO 4: Calcular calibración
@@ -140,7 +145,8 @@ class CaptureAndCalibrateSM(Behavior):
                     eye_in_hand_mode=self.eye_in_hand,
                     calibration_file_name=self.calibration_file_name,
                     customize_file=False,
-                    launch_visp=True
+                    launch_visp=True,
+                    output_folder=self.output_folder
                 ),
                 transitions={'finish': 'finished', 'failed': 'failed'},
                 autonomy={'finish': Autonomy.Off, 'failed': Autonomy.Off},

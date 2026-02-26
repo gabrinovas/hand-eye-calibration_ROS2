@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 import os
 from setuptools import setup
+from glob import glob
 
 package_name = 'hand_eye_flexbe_behaviors'
 
 setup(
     name=package_name,
-    version='1.3.1',
+    version='1.0.0',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,10 +16,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Luis',
-    maintainer_email='errrr0501done@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='Gabriel Novas',
+    maintainer_email='gabriel.novas@aimen.es',
+    description='Behaviors for hand-eye calibration with MoveIt and FlexBE',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
