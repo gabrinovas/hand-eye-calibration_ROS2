@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<behavior name="Capture and Calibrate Hand-Eye">
+
+    <executable package_path="hand_eye_flexbe_behaviors.capture_and_calibrate_sm" class="CaptureAndCalibrateSM" />
+    <tagstring>v1.0</tagstring>
+    <author>Gabriel Novas</author>
+    <date>2024</date>
+    <description>
+        Comportamiento COMPLETO para calibración ojo-mano:
+        
+        1. AUTO-LANZA: MoveIt + RViz se abren solos
+        2. TÚ CONTROLAS: Mueves robot con interfaz de MoveIt
+        3. CAPTURAS: Presionas ESPACIO en cada pose
+        4. AUTO-PROCESA: Detecta Charuco en todas las imágenes
+        5. AUTO-CALIBRA: Calcula calibración final con VISP
+        
+        Resultados en: /home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses/
+    </description>
+
+    <params>
+        <param type="numeric" name="total_poses" default="20" 
+               label="Total Poses" hint="Número de poses a capturar" />
+        <param type="text" name="camera_type" default="realsense" 
+               label="Camera Type" hint="realsense o usb" />
+        <param type="text" name="base_frame" default="base_link" 
+               label="Base Frame" hint="Frame base del robot" />
+        <param type="text" name="tool_frame" default="tool0" 
+               label="Tool Frame" hint="Frame del efector" />
+        <param type="boolean" name="eye_in_hand" default="False" 
+               label="Eye-in-Hand" hint="True si cámara en robot" />
+        <param type="text" name="calibration_file_name" default="hand_eye_calibration.ini" 
+               label="Calibration File" hint="Nombre archivo salida" />
+        <param type="text" name="moveit_launch_file" default="move_group.launch.py" 
+               label="MoveIt Launch" hint="Archivo launch de MoveIt" />
+        <param type="text" name="robot_name" default="panda" 
+               label="Robot Name" hint="panda, ur, etc." />
+        <param type="text" name="moveit_config_package" default="panda_moveit_config" 
+               label="MoveIt Config Package" hint="Paquete de configuración" />
+    </params>
+
+</behavior>
