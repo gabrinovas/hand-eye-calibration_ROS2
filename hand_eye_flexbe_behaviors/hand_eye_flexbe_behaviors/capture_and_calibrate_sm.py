@@ -1,12 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
+###########################################################
+#               WARNING: Generated code!                  #
+#              **************************                 #
+# Manual changes may get lost if file is generated again. #
+# Only code inside the [MANUAL] tags will be kept.        #
+###########################################################
+
+from flexbe_core import Behavior, Autonomy, OperatableStateMachine, ConcurrencyContainer, PriorityContainer, Logger
 from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
+# Additional imports can be added inside the following tags
+# [MANUAL_IMPORT]
+
+# [/MANUAL_IMPORT]
 
 
+'''
+Created on Thu Feb 26 2026
+@author: Gabriel Novas
+'''
 class CaptureAndCalibrateSM(Behavior):
     """
     Comportamiento COMPLETO para calibración ojo-mano:
@@ -21,8 +36,9 @@ class CaptureAndCalibrateSM(Behavior):
     def __init__(self, node):
         super(CaptureAndCalibrateSM, self).__init__()
         self.name = 'Capture and Calibrate Hand-Eye'
+        self.node = node
 
-        # Parámetros
+        # Parámetros del comportamiento
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense')
         self.add_parameter('base_frame', 'base_link')
@@ -35,25 +51,38 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_name', 'panda')
         self.add_parameter('moveit_config_package', 'panda_moveit_config')
         
-        # Rutas
+        # Rutas fijas del proyecto
         self.add_parameter('pictures_folder', '/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', '/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses')
         self.add_parameter('output_folder', '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses')
 
-        # Inicializar ROS
-        OperatableStateMachine.initialize_ros(node)
-        Logger.initialize(node)
+        # Inicializar estados
         LaunchMoveItState.initialize_ros(node)
         TakePoseAndPictureState.initialize_ros(node)
         OfflineFindCharucoState.initialize_ros(node)
         ComputeCalibState.initialize_ros(node)
+        OperatableStateMachine.initialize_ros(node)
+        Logger.initialize(node)
+
+        # Additional initialization code can be added inside the following tags
+        # [MANUAL_INIT]
+        
+        # [/MANUAL_INIT]
+
+        # Behavior comments:
 
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
+        # Variables para pasar datos entre estados
         _state_machine.userdata.current_index = 0
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
+
+        # Additional creation code can be added inside the following tags
+        # [MANUAL_CREATE]
+        
+        # [/MANUAL_CREATE]
 
         with _state_machine:
             # ESTADO 1: Lanzar MoveIt
@@ -121,3 +150,8 @@ class CaptureAndCalibrateSM(Behavior):
                 })
 
         return _state_machine
+
+    # Private functions can be added inside the following tags
+    # [MANUAL_FUNC]
+    
+    # [/MANUAL_FUNC]
