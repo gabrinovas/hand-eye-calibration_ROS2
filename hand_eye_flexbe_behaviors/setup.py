@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 from setuptools import setup
+from glob import glob
 
 package_name = 'hand_eye_flexbe_behaviors'
 
@@ -9,14 +10,28 @@ setup(
     version='1.0.0',
     packages=[package_name],
     data_files=[
+        # Archivo de recurso
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
+        
+        # Package.xml
         ('share/' + package_name, ['package.xml']),
+        
+        # =========================================================
+        # MANIFIESTOS - INSTALADOS EN AMBAS UBICACIONES
+        # =========================================================
+        
+        # Ubicación 1: Estándar de ROS2 (share)
         (os.path.join('share', package_name, 'manifest'), 
-         [os.path.join('manifest', 'camera_calibration.xml'),
-          os.path.join('manifest', 'manual_hand_eye_calibration.xml'),
-          os.path.join('manifest', 'verify_calibraion.xml'),
-          os.path.join('manifest', 'capture_and_calibrate.xml')]),
+         glob('manifest/*.xml')),
+        
+        # Ubicación 2: La que espera FlexBE (lib/.../manifest)
+        (os.path.join('lib', package_name, package_name, 'manifest'),
+         glob('manifest/*.xml')),
+        
+        # Ubicación 3: Por si acaso (directamente en lib)
+        (os.path.join('lib', package_name, 'manifest'),
+         glob('manifest/*.xml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

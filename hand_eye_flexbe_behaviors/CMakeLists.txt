@@ -7,16 +7,24 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclpy REQUIRED)
 
-# Instalar manifiestos
+# Instalar manifiestos en múltiples ubicaciones
 install(DIRECTORY
   manifest
-  DESTINATION share/${PROJECT_NAME}
+  DESTINATION share/${PROJECT_NAME}/manifest
 )
 
-# Instalar behaviors
+install(DIRECTORY
+  manifest
+  DESTINATION lib/${PROJECT_NAME}/${PROJECT_NAME}/manifest
+)
+
+install(DIRECTORY
+  manifest
+  DESTINATION lib/${PROJECT_NAME}/manifest
+)
+
+# Instalar el paquete Python
 ament_python_install_package(${PROJECT_NAME})
 
 ament_package()
