@@ -18,7 +18,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         
         # MANIFIESTOS
-        (os.path.join('lib', package_name, package_name, 'manifest'),
+        (os.path.join('lib', package_name, 'manifest'),
          glob('manifest/*.xml')),
     ],
     install_requires=['setuptools'],

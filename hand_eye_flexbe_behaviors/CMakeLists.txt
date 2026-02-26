@@ -7,10 +7,12 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
 
 install(DIRECTORY
   manifest
-  DESTINATION lib/${PROJECT_NAME}/${PROJECT_NAME}/manifest
+  DESTINATION lib/${PROJECT_NAME}/manifest
 )
 
 # Instalar el paquete Python
