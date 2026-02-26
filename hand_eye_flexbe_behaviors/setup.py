@@ -17,17 +17,8 @@ setup(
         # Package.xml
         ('share/' + package_name, ['package.xml']),
         
-        # MANIFIESTOS - Instalados en TODAS las ubicaciones posibles
-        # Ubicación 1: Estándar de ROS2 (share)
-        (os.path.join('share', package_name, 'manifest'), 
-         glob('manifest/*.xml')),
-        
-        # Ubicación 2: La que espera FlexBE (lib/.../manifest)
+        # MANIFIESTOS
         (os.path.join('lib', package_name, package_name, 'manifest'),
-         glob('manifest/*.xml')),
-        
-        # Ubicación 3: Por si acaso (directamente en lib)
-        (os.path.join('lib', package_name, 'manifest'),
          glob('manifest/*.xml')),
     ],
     install_requires=['setuptools'],
