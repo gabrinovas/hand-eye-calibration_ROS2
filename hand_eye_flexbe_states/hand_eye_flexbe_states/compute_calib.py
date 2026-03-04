@@ -47,6 +47,8 @@ class ComputeCalibState(EventState):
         self.eye_in_hand_mode = eye_in_hand_mode
         self.launch_visp = launch_visp
         self.visp_process = None
+        self.calib_client = None
+        self._service_ready = False
         
         # Configurar carpetas de salida
         self.output_folder = output_folder or '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses'
@@ -66,9 +68,6 @@ class ComputeCalibState(EventState):
         self.config = configparser.ConfigParser()
         self.config.optionxform = str
         
-        # Cliente de servicio (se inicializa en on_start)
-        self.calib_client = None
-        
         Logger.loginfo("="*60)
         Logger.loginfo("🔧 ESTADO: ComputeCalibState (UR5e)")
         Logger.loginfo("="*60)
@@ -79,14 +78,23 @@ class ComputeCalibState(EventState):
     
     def on_start(self):
         """Inicializar: lanzar VISP si es necesario"""
+        # IMPORTANTE: Primero asegurar que el proxy tiene el nodo
+        ProxyServiceCaller.initialize(ComputeCalibState._node)
+        
         if self.launch_visp:
             self._ensure_visp_running()
         
-        # Inicializar cliente
-        ProxyServiceCaller._initialize(ComputeCalibState._node)
+        # Ahora crear el cliente
         self.calib_client = ProxyServiceCaller({
             '/compute_effector_camera_quick': ComputeEffectorCameraQuick
         })
+        
+        # Verificar que el servicio está disponible
+        if self.calib_client.is_available('/compute_effector_camera_quick'):
+            self._service_ready = True
+            Logger.loginfo("✅ Servicio VISP disponible")
+        else:
+            Logger.logwarn("⏳ Esperando servicio VISP...")
     
     def _ensure_visp_running(self):
         """Lanza VISP si no está corriendo"""
@@ -148,16 +156,13 @@ class ComputeCalibState(EventState):
                 except:
                     pass
             
-            # También verificar servicio
-            try:
-                client = self._node.create_client(
-                    ComputeEffectorCameraQuick,
-                    '/compute_effector_camera_quick'
-                )
-                if client.wait_for_service(timeout_sec=1.0):
-                    return True
-            except:
-                pass
+            # También verificar servicio si ya tenemos cliente
+            if self.calib_client and hasattr(self.calib_client, 'is_available'):
+                try:
+                    if self.calib_client.is_available('/compute_effector_camera_quick'):
+                        return True
+                except:
+                    pass
                 
         except Exception as e:
             Logger.logwarn(f"⚠️ Error verificando VISP: {e}")
@@ -166,6 +171,15 @@ class ComputeCalibState(EventState):
     
     def execute(self, userdata):
         """Ejecuta la calibración con los datos recibidos"""
+        
+        # Verificar que el servicio está listo
+        if not self._service_ready:
+            if self.calib_client and self.calib_client.is_available('/compute_effector_camera_quick'):
+                self._service_ready = True
+                Logger.loginfo("✅ Servicio VISP ahora disponible")
+            else:
+                Logger.logwarn("⏳ Esperando a que el servicio VISP esté disponible...")
+                return  # No fallar, solo esperar
         
         # Verificar datos
         if not hasattr(userdata.base_h_tool, 'transforms') or len(userdata.base_h_tool.transforms) == 0:
@@ -370,12 +384,10 @@ class ComputeCalibState(EventState):
         if self.visp_process:
             Logger.loginfo("🛑 Deteniendo VISP...")
             try:
-                # Enviar SIGTERM
                 self.visp_process.terminate()
                 self.visp_process.wait(timeout=3)
             except:
                 try:
-                    # Forzar kill si no responde
                     self.visp_process.kill()
                 except:
                     pass
