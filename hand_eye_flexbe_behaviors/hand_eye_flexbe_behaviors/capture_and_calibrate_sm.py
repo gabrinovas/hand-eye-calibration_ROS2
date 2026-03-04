@@ -48,10 +48,12 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'hand_eye_calibration.ini')
         
-        # Parámetros de MoveIt
-        self.add_parameter('moveit_launch_file', 'move_group.launch.py')
-        self.add_parameter('robot_name', 'panda')
-        self.add_parameter('moveit_config_package', 'panda_moveit_config')
+        # Parámetros de MoveIt para UR5e
+        self.add_parameter('moveit_launch_file', 'ur_moveit.launch.py')
+        self.add_parameter('robot_name', 'ur5e')
+        self.add_parameter('moveit_config_package', 'ur_moveit_config')
+        self.add_parameter('robot_ip', '192.168.1.101')
+        self.add_parameter('use_fake_hardware', True)
         
         # Rutas del proyecto - AHORA SE USAN
         base_calib_path = '/home/drims/drims_ws/calibrations'
@@ -92,7 +94,9 @@ class CaptureAndCalibrateSM(Behavior):
                 LaunchMoveItState(
                     moveit_launch_file=self.moveit_launch_file,
                     robot_name=self.robot_name,
-                    moveit_config_package=self.moveit_config_package
+                    moveit_config_package=self.moveit_config_package,
+                    robot_ip=self.robot_ip,
+                    use_fake_hardware=self.use_fake_hardware
                 ),
                 transitions={'done': 'Capture_Poses', 'failed': 'failed'},
                 autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})

@@ -41,16 +41,23 @@
         <param type="text" name="calibration_file_name" default="hand_eye_calibration.ini" 
                label="Calibration File" hint="Nombre archivo salida" />
 
-        <param type="text" name="moveit_launch_file" default="move_group.launch.py" 
-               label="MoveIt Launch" hint="Archivo launch de MoveIt" />
+        <!-- Configuración específica para UR5e -->
+        <param type="text" name="moveit_launch_file" default="ur_moveit.launch.py" 
+               label="MoveIt Launch" hint="Archivo launch de MoveIt para UR" />
 
-        <param type="text" name="robot_name" default="panda" 
-               label="Robot Name" hint="panda, ur, etc." />
+        <param type="text" name="robot_name" default="ur5e" 
+               label="Robot Name" hint="ur5e, ur10, etc." />
 
-        <param type="text" name="moveit_config_package" default="panda_moveit_config" 
-               label="MoveIt Config Package" hint="Paquete configuración" />
+        <param type="text" name="moveit_config_package" default="ur_moveit_config" 
+               label="MoveIt Config Package" hint="Paquete configuración UR" />
 
-        <!-- Carpeta de salida (ahora sí se usa) -->
+        <param type="text" name="robot_ip" default="192.168.1.101" 
+               label="Robot IP" hint="IP del robot UR" />
+
+        <param type="boolean" name="use_fake_hardware" default="True" 
+               label="Use Fake Hardware" hint="True para simulación, False para robot real" />
+
+        <!-- Carpeta de salida (ajustada para UR) -->
         <param type="text" name="output_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses" 
                label="Output Folder" 

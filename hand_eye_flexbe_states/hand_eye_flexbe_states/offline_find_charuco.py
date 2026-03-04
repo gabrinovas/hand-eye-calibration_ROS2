@@ -8,6 +8,7 @@ from flexbe_core import EventState, Logger
 import os
 import yaml
 import glob
+import numpy as np
 from geometry_msgs.msg import Transform
 from visp_hand2eye_calibration.msg import TransformArray
 from std_msgs.msg import Header
@@ -50,6 +51,14 @@ class OfflineFindCharucoState(EventState):
         self.camera_all = TransformArray()
         self.loaded = False
         
+        Logger.loginfo("="*60)
+        Logger.loginfo("🔍 ESTADO: OfflineFindCharuco")
+        Logger.loginfo("="*60)
+        Logger.loginfo(f"📁 Imágenes: {self.pictures_folder}")
+        Logger.loginfo(f"📁 Poses robot: {self.robot_poses_folder}")
+        Logger.loginfo(f"📁 Output: {self.output_folder}")
+        Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand else 'Eye-to-hand'}")
+        
     def on_enter(self, userdata):
         """Al entrar, cargar pares y procesar"""
         if not self.loaded:
@@ -64,7 +73,7 @@ class OfflineFindCharucoState(EventState):
             
             self.camera_all.header = Header()
             self.camera_all.header.stamp = self._node.get_clock().now().to_msg()
-            self.camera_all.header.frame_id = 'calib_camera'
+            self.camera_all.header.frame_id = 'camera_color_optical_frame'
             
             Logger.loginfo(f"📚 Cargados {len(self.pairs)} pares de calibración")
         
@@ -87,7 +96,7 @@ class OfflineFindCharucoState(EventState):
         return 'done'
     
     def _load_pairs(self):
-        """Carga los pares generados por generate_calibration_pairs.py"""
+        """Carga los pares generados"""
         try:
             # Buscar en pairs/
             pairs_folder = os.path.join(self.output_folder, 'pairs')
@@ -96,26 +105,42 @@ class OfflineFindCharucoState(EventState):
                 for pf in pair_files:
                     with open(pf, 'r') as f:
                         self.pairs.append(yaml.safe_load(f))
+                Logger.loginfo(f"📖 Cargados {len(pair_files)} pares desde {pairs_folder}")
             
             # Si no hay pares, intentar cargar desde robot_poses_folder
             if not self.pairs:
                 Logger.logwarn("⚠️ No se encontraron pares, buscando poses individuales...")
+                
+                # Buscar archivos de detección
+                detections_folder = os.path.join(self.output_folder, 'detections')
+                if os.path.exists(detections_folder):
+                    detection_files = sorted(glob.glob(os.path.join(detections_folder, 'detection_*.yaml')))
+                else:
+                    detection_files = []
+                
+                # Buscar poses del robot
                 pose_files = sorted(glob.glob(os.path.join(self.robot_poses_folder, 'pose_*.yaml')))
-                detection_files = sorted(glob.glob(os.path.join(self.output_folder, 'detections', 'detection_*.yaml')))
                 
                 # Emparejar por índice
-                for i, (pf, df) in enumerate(zip(pose_files, detection_files)):
-                    with open(pf, 'r') as f:
+                num_pairs = min(len(pose_files), len(detection_files))
+                if num_pairs == 0:
+                    Logger.logerr("❌ No se encontraron ni poses ni detecciones")
+                    return False
+                
+                for i in range(num_pairs):
+                    with open(pose_files[i], 'r') as f:
                         pose_data = yaml.safe_load(f)
-                    with open(df, 'r') as f:
+                    with open(detection_files[i], 'r') as f:
                         det_data = yaml.safe_load(f)
                     
                     pair = {
                         'index': i+1,
                         'robot_pose': pose_data,
-                        'charuco_pose': det_data
+                        'charuco_pose': det_data.get('charuco_pose', det_data)
                     }
                     self.pairs.append(pair)
+                
+                Logger.loginfo(f"📖 Cargados {num_pairs} pares desde archivos individuales")
             
             return len(self.pairs) > 0
             
@@ -173,6 +198,11 @@ class OfflineFindCharucoState(EventState):
                     trans_charuco.rotation.y = charuco_pose['quaternion'][1]
                     trans_charuco.rotation.z = charuco_pose['quaternion'][2]
                     trans_charuco.rotation.w = charuco_pose['quaternion'][3]
+                elif 'orientation' in charuco_pose:
+                    trans_charuco.rotation.x = charuco_pose['orientation'][0]
+                    trans_charuco.rotation.y = charuco_pose['orientation'][1]
+                    trans_charuco.rotation.z = charuco_pose['orientation'][2]
+                    trans_charuco.rotation.w = charuco_pose['orientation'][3]
                 else:
                     trans_charuco.rotation.x = charuco_pose.get('qx', 0)
                     trans_charuco.rotation.y = charuco_pose.get('qy', 0)

@@ -2,6 +2,7 @@
 """
 Estado FlexBE para calcular calibración ojo-mano con VISP.
 Lanza VISP automáticamente si no está corriendo.
+Adaptado para UR5e.
 """
 
 import configparser
@@ -11,12 +12,12 @@ import subprocess
 import time
 import psutil
 import numpy as np
+import signal
 from geometry_msgs.msg import Transform
 from visp_hand2eye_calibration.msg import TransformArray
 from visp_hand2eye_calibration.srv import ComputeEffectorCameraQuick
 from flexbe_core import EventState, Logger
 from flexbe_core.proxy import ProxyServiceCaller
-from ament_index_python.packages import get_package_share_directory
 import tf_transformations
 
 class ComputeCalibState(EventState):
@@ -57,9 +58,9 @@ class ComputeCalibState(EventState):
             self.calibration_file_name = str(calibration_file_name)
         else:
             if eye_in_hand_mode:
-                self.calibration_file_name = "eye_in_hand_calibration.ini"
+                self.calibration_file_name = "eye_in_hand_calibration_ur5e.ini"
             else:
-                self.calibration_file_name = "eye_to_hand_calibration.ini"
+                self.calibration_file_name = "eye_to_hand_calibration_ur5e.ini"
         
         # Config parser para INI
         self.config = configparser.ConfigParser()
@@ -69,7 +70,7 @@ class ComputeCalibState(EventState):
         self.calib_client = None
         
         Logger.loginfo("="*60)
-        Logger.loginfo("🔧 ESTADO: ComputeCalibState")
+        Logger.loginfo("🔧 ESTADO: ComputeCalibState (UR5e)")
         Logger.loginfo("="*60)
         Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
         Logger.loginfo(f"📁 Archivo: {self.calibration_file_name}")
@@ -101,27 +102,36 @@ class ComputeCalibState(EventState):
                 'visp_hand2eye_calibration', 
                 'visp_hand2eye_calibration_calibrator',
                 '--ros-args',
-                '-p', f'eye_in_hand:={str(self.eye_in_hand_mode).lower()}'
+                '-p', f'eye_in_hand:={str(self.eye_in_hand_mode).lower()}',
+                '-p', 'camera_frame:=camera_color_optical_frame',
+                '-p', 'marker_frame:=charuco_frame',
+                '-r', '__ns:=/visp_calibration'
             ]
+            
+            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
             
             self.visp_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                start_new_session=True
+                start_new_session=True,
+                text=True
             )
             
             # Esperar a que inicie
             Logger.loginfo("⏳ Esperando a que VISP inicie...")
-            time.sleep(3)
             
-            if self._is_visp_running():
-                Logger.loginfo("✅ VISP iniciado correctamente")
-                return True
-            else:
-                stderr = self.visp_process.stderr.read().decode()
+            for i in range(10):
+                time.sleep(1)
+                if self._is_visp_running():
+                    Logger.loginfo(f"✅ VISP iniciado correctamente después de {i+1}s")
+                    return True
+            
+            # Si no responde, verificar stderr
+            stderr = self.visp_process.stderr.read()
+            if stderr:
                 Logger.logerr(f"❌ Error iniciando VISP: {stderr}")
-                return False
+            return False
                 
         except Exception as e:
             Logger.logerr(f"❌ Error lanzando VISP: {e}")
@@ -149,8 +159,8 @@ class ComputeCalibState(EventState):
             except:
                 pass
                 
-        except:
-            pass
+        except Exception as e:
+            Logger.logwarn(f"⚠️ Error verificando VISP: {e}")
         
         return False
     
@@ -215,7 +225,7 @@ class ComputeCalibState(EventState):
             
             # Mostrar resultado
             Logger.loginfo("="*60)
-            Logger.loginfo("✅ CALIBRACIÓN COMPLETADA")
+            Logger.loginfo("✅ CALIBRACIÓN COMPLETADA - UR5e")
             Logger.loginfo("="*60)
             Logger.loginfo(f"📐 Traslación (metros):")
             Logger.loginfo(f"   x = {res.effector_camera.translation.x:.6f}")
@@ -226,6 +236,15 @@ class ComputeCalibState(EventState):
             Logger.loginfo(f"   qy = {res.effector_camera.rotation.y:.6f}")
             Logger.loginfo(f"   qz = {res.effector_camera.rotation.z:.6f}")
             Logger.loginfo(f"   qw = {res.effector_camera.rotation.w:.6f}")
+            
+            # Convertir a ángulos de Euler para UR (opcional)
+            quat = [res.effector_camera.rotation.x,
+                   res.effector_camera.rotation.y,
+                   res.effector_camera.rotation.z,
+                   res.effector_camera.rotation.w]
+            euler = tf_transformations.euler_from_quaternion(quat)
+            Logger.loginfo(f"📐 Ángulos Euler (rad):")
+            Logger.loginfo(f"   roll = {euler[0]:.6f}, pitch = {euler[1]:.6f}, yaw = {euler[2]:.6f}")
             
             # Guardar resultado
             self._save_calibration(res.effector_camera, num_poses)
@@ -283,6 +302,7 @@ class ComputeCalibState(EventState):
         self.config.set("hand_eye_calibration", "qw", str(transform.rotation.w))
         self.config.set("hand_eye_calibration", "num_poses_used", str(num_poses))
         self.config.set("hand_eye_calibration", "eye_in_hand", str(self.eye_in_hand_mode))
+        self.config.set("hand_eye_calibration", "robot_model", "ur5e")
         self.config.set("hand_eye_calibration", "timestamp", str(time.time()))
         
         with open(ini_path, 'w') as f:
@@ -301,8 +321,12 @@ class ComputeCalibState(EventState):
         T[:3, :3] = R
         T[:3, 3] = [transform.translation.x, transform.translation.y, transform.translation.z]
         
+        # Convertir a ángulos de Euler para UR
+        euler = tf_transformations.euler_from_quaternion(quat)
+        
         calib_data = {
             'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'robot_model': 'ur5e',
             'eye_in_hand': self.eye_in_hand_mode,
             'num_poses_used': num_poses,
             'transform_matrix': T.tolist(),
@@ -311,14 +335,22 @@ class ComputeCalibState(EventState):
                 'y': transform.translation.y,
                 'z': transform.translation.z
             },
-            'rotation': {
+            'rotation_quaternion': {
                 'x': transform.rotation.x,
                 'y': transform.rotation.y,
                 'z': transform.rotation.z,
                 'w': transform.rotation.w
             },
-            'quaternion': [transform.rotation.x, transform.rotation.y, 
-                          transform.rotation.z, transform.rotation.w]
+            'rotation_euler_rad': {
+                'roll': euler[0],
+                'pitch': euler[1],
+                'yaw': euler[2]
+            },
+            'rotation_euler_deg': {
+                'roll': np.degrees(euler[0]),
+                'pitch': np.degrees(euler[1]),
+                'yaw': np.degrees(euler[2])
+            }
         }
         
         with open(yaml_path, 'w') as f:
@@ -327,7 +359,7 @@ class ComputeCalibState(EventState):
         Logger.loginfo(f"💾 Calibración guardada (YAML): {yaml_path}")
         
         # También guardar una copia en la carpeta raíz de output
-        root_yaml = os.path.join(self.output_folder, 'hand_eye_calibration.yaml')
+        root_yaml = os.path.join(self.output_folder, 'hand_eye_calibration_ur5e.yaml')
         with open(root_yaml, 'w') as f:
             yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False)
         
@@ -337,9 +369,15 @@ class ComputeCalibState(EventState):
         """Limpiar proceso de VISP al terminar"""
         if self.visp_process:
             Logger.loginfo("🛑 Deteniendo VISP...")
-            self.visp_process.terminate()
             try:
+                # Enviar SIGTERM
+                self.visp_process.terminate()
                 self.visp_process.wait(timeout=3)
             except:
-                self.visp_process.kill()
+                try:
+                    # Forzar kill si no responde
+                    self.visp_process.kill()
+                except:
+                    pass
             self.visp_process = None
+            Logger.loginfo("✅ VISP detenido")
