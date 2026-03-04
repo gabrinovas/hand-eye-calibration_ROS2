@@ -43,9 +43,9 @@ class LaunchMoveItState(EventState):
         """Lanzar MoveIt al iniciar el estado"""
         try:
             # Verificar si MoveIt ya está corriendo
-            if self._is_moveit_running():
-                Logger.loginfo("✅ MoveIt ya está corriendo")
-                # Verificar RViz específicamente
+            if self._is_moveit_truly_running():
+                Logger.loginfo("✅ MoveIt ya está corriendo correctamente")
+                # Verificar RViz
                 if not self._is_rviz_running():
                     Logger.loginfo("🖥️ RViz no está abierto, lanzándolo...")
                     self._launch_rviz()
@@ -57,13 +57,10 @@ class LaunchMoveItState(EventState):
             Logger.loginfo(f"📦 Paquete: {self.moveit_config_package}")
             Logger.loginfo(f"📄 Launch: {self.moveit_launch_file}")
             Logger.loginfo(f"🤖 Robot: {self.robot_name}")
+            Logger.loginfo(f"🔌 IP: {self.robot_ip}")
+            Logger.loginfo(f"🎮 Modo: {'SIMULACIÓN' if self.use_fake_hardware else 'ROBOT REAL'}")
             
-            if self.use_fake_hardware:
-                Logger.loginfo("🖥️ Modo: SIMULACIÓN (fake hardware)")
-            else:
-                Logger.loginfo(f"🔌 Modo: ROBOT REAL (IP: {self.robot_ip})")
-            
-            # Construir comando para UR
+            # Construir comando EXACTAMENTE como funciona manualmente
             cmd = [
                 'ros2', 'launch',
                 self.moveit_config_package,
@@ -78,8 +75,8 @@ class LaunchMoveItState(EventState):
             
             # Variables de entorno para forzar visualización
             env = os.environ.copy()
-            env['DISPLAY'] = ':0'  # Asegurar que usa el display correcto
-            env['XDG_RUNTIME_DIR'] = f'/run/user/{os.getuid()}'  # Para problemas de permisos
+            env['DISPLAY'] = ':0'
+            env['XDG_RUNTIME_DIR'] = f'/run/user/{os.getuid()}'
             
             # Lanzar en proceso separado
             self.process = subprocess.Popen(
@@ -94,54 +91,48 @@ class LaunchMoveItState(EventState):
             # Esperar a que inicie
             Logger.loginfo("⏳ Esperando a que MoveIt inicie (30 segundos)...")
             
-            # Monitorear inicio
-            moveit_started = False
             for i in range(30):
                 time.sleep(1)
                 
-                # Verificar nodos de MoveIt
-                if self._is_moveit_running():
-                    if not moveit_started:
-                        Logger.loginfo(f"✅ MoveIt lanzado correctamente después de {i+1}s")
-                        moveit_started = True
+                # Verificar si MoveIt ya está corriendo de verdad
+                if self._is_moveit_truly_running():
+                    Logger.loginfo(f"✅ MoveIt lanzado correctamente después de {i+1}s")
                     
                     # Verificar RViz
                     if self._is_rviz_running():
                         Logger.loginfo("✅ RViz está corriendo")
-                        return
                     else:
-                        # Si MoveIt está pero RViz no, esperar un poco más
-                        if i > 10:  # Esperar 10 segundos antes de preocuparse
-                            Logger.logwarn("⚠️ RViz no detectado, puede estar iniciando...")
+                        Logger.loginfo("🖥️ Lanzando RViz...")
+                        self._launch_rviz()
+                    
+                    return
                 
                 # Verificar si el proceso falló
                 if self.process.poll() is not None:
                     stderr = self.process.stderr.read()
                     stdout = self.process.stdout.read()
                     Logger.logerr(f"❌ Error lanzando MoveIt:")
-                    Logger.logerr(f"STDERR: {stderr}")
-                    Logger.logerr(f"STDOUT: {stdout}")
+                    if stderr:
+                        Logger.logerr(f"STDERR: {stderr}")
+                    if stdout:
+                        Logger.logerr(f"STDOUT: {stdout}")
                     return 'failed'
             
-            # Si llegamos aquí, timeout pero MoveIt puede estar corriendo
-            if moveit_started:
-                Logger.logwarn("⚠️ MoveIt iniciado pero timeout esperando confirmación")
-                # Intentar lanzar RViz explícitamente por si acaso
-                if not self._is_rviz_running():
-                    self._launch_rviz()
-                return
-            else:
-                Logger.logerr("❌ Timeout esperando a MoveIt")
-                return 'failed'
+            # Si llegamos aquí, timeout
+            Logger.logerr("❌ Timeout esperando a MoveIt")
+            return 'failed'
             
         except Exception as e:
             Logger.logerr(f"❌ Error: {str(e)}")
             return 'failed'
     
-    def _is_moveit_running(self):
-        """Verifica si MoveIt está corriendo"""
+    def _is_moveit_truly_running(self):
+        """
+        Verifica si MoveIt está realmente corriendo y conectado.
+        Más robusto que solo buscar nodos.
+        """
         try:
-            # Buscar nodos de MoveIt
+            # 1. Verificar que el nodo move_group existe
             result = subprocess.run(
                 ['ros2', 'node', 'list'],
                 capture_output=True,
@@ -149,11 +140,36 @@ class LaunchMoveItState(EventState):
                 timeout=5
             )
             
-            # Nodos clave de MoveIt para UR
-            moveit_nodes = ['move_group', 'robot_state_publisher']
-            for node in moveit_nodes:
-                if node in result.stdout:
-                    return True
+            if 'move_group' not in result.stdout:
+                return False
+            
+            # 2. Verificar que move_group está suscrito a joint_states
+            info_result = subprocess.run(
+                ['ros2', 'node', 'info', '/move_group'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            # Buscar si está suscrito a joint_states
+            if '/joint_states' not in info_result.stdout:
+                Logger.logwarn("⚠️ move_group no está suscrito a joint_states")
+                return False
+            
+            # 3. Verificar que hay un planificador disponible
+            planners_result = subprocess.run(
+                ['ros2', 'service', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if '/query_planner_interface' not in planners_result.stdout:
+                Logger.logwarn("⚠️ Servicios de planificación no disponibles")
+                return False
+            
+            Logger.loginfo("✅ MoveIt verificado: nodo activo, suscrito y con servicios")
+            return True
                     
         except Exception as e:
             Logger.logwarn(f"⚠️ Error verificando MoveIt: {e}")
@@ -166,30 +182,14 @@ class LaunchMoveItState(EventState):
             # Buscar por proceso
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
-                    if 'rviz2' in proc.info['name'].lower():
+                    if proc.info['name'] and 'rviz2' in proc.info['name'].lower():
                         return True
-                    # También buscar en cmdline por si el nombre es diferente
                     if proc.info['cmdline'] and any('rviz2' in arg for arg in proc.info['cmdline']):
                         return True
                 except:
                     pass
-            
-            # También buscar ventanas (Linux)
-            try:
-                result = subprocess.run(
-                    ['wmctrl', '-l'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
-                if 'RViz' in result.stdout or 'rviz' in result.stdout.lower():
-                    return True
-            except:
-                pass
-                
-        except Exception as e:
-            Logger.logwarn(f"⚠️ Error verificando RViz: {e}")
-        
+        except:
+            pass
         return False
     
     def _launch_rviz(self):
@@ -232,11 +232,6 @@ class LaunchMoveItState(EventState):
             )
             
             time.sleep(3)
-            
-            if self._is_rviz_running():
-                Logger.loginfo("✅ RViz lanzado correctamente")
-            else:
-                Logger.logwarn("⚠️ RViz puede estar iniciando...")
             
         except Exception as e:
             Logger.logwarn(f"⚠️ Error lanzando RViz: {e}")
