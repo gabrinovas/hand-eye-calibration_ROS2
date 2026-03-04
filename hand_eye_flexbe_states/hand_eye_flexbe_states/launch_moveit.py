@@ -15,7 +15,7 @@ class LaunchMoveItState(EventState):
     """
     Lanza MoveIt con la interfaz gráfica para UR5e.
     
-    -- moveit_launch_file    string   Archivo launch de MoveIt
+    -- moveit_launch_file    string   Archivo launch de MoveIt (ur_moveit.launch.py)
     -- robot_name            string   Nombre del robot (ur5e)
     -- moveit_config_package string   Paquete de configuración (ur_moveit_config)
     -- robot_ip              string   IP del robot UR
@@ -67,29 +67,19 @@ class LaunchMoveItState(EventState):
             cmd = [
                 'ros2', 'launch',
                 self.moveit_config_package,
-                self.moveit_launch_file
+                self.moveit_launch_file,
+                f'ur_type:={self.robot_name}',
+                f'robot_ip:={self.robot_ip}',
+                f'use_fake_hardware:={str(self.use_fake_hardware).lower()}',
+                'launch_rviz:=true'
             ]
             
-            # Añadir argumentos específicos para UR
-            if self.use_fake_hardware:
-                cmd.extend(['use_fake_hardware:=true'])
-                cmd.extend(['robot_ip:=xxx.xxx.xxx.xxx'])
-            else:
-                cmd.extend(['use_fake_hardware:=false'])
-                cmd.extend([f'robot_ip:={self.robot_ip}'])
-            
-            # Añadir tipo de UR
-            cmd.extend([f'ur_type:={self.robot_name}'])
-            
-            # FORZAR RViz explícitamente
-            cmd.extend(['launch_rviz:=true'])
-            cmd.extend(['headless:=false'])
+            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
             
             # Variables de entorno para forzar visualización
             env = os.environ.copy()
             env['DISPLAY'] = ':0'  # Asegurar que usa el display correcto
-            
-            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
+            env['XDG_RUNTIME_DIR'] = f'/run/user/{os.getuid()}'  # Para problemas de permisos
             
             # Lanzar en proceso separado
             self.process = subprocess.Popen(
@@ -120,21 +110,25 @@ class LaunchMoveItState(EventState):
                         Logger.loginfo("✅ RViz está corriendo")
                         return
                     else:
-                        # Si MoveIt está pero RViz no, lanzar RViz explícitamente
-                        if i > 5:  # Esperar 5 segundos antes de intentar
-                            Logger.logwarn("⚠️ RViz no detectado, lanzándolo explícitamente...")
-                            self._launch_rviz()
+                        # Si MoveIt está pero RViz no, esperar un poco más
+                        if i > 10:  # Esperar 10 segundos antes de preocuparse
+                            Logger.logwarn("⚠️ RViz no detectado, puede estar iniciando...")
                 
                 # Verificar si el proceso falló
                 if self.process.poll() is not None:
                     stderr = self.process.stderr.read()
-                    Logger.logerr(f"❌ Error lanzando MoveIt: {stderr}")
+                    stdout = self.process.stdout.read()
+                    Logger.logerr(f"❌ Error lanzando MoveIt:")
+                    Logger.logerr(f"STDERR: {stderr}")
+                    Logger.logerr(f"STDOUT: {stdout}")
                     return 'failed'
             
-            # Si llegamos aquí, timeout
+            # Si llegamos aquí, timeout pero MoveIt puede estar corriendo
             if moveit_started:
-                Logger.logwarn("⚠️ MoveIt iniciado pero RViz no detectado")
-                self._launch_rviz()
+                Logger.logwarn("⚠️ MoveIt iniciado pero timeout esperando confirmación")
+                # Intentar lanzar RViz explícitamente por si acaso
+                if not self._is_rviz_running():
+                    self._launch_rviz()
                 return
             else:
                 Logger.logerr("❌ Timeout esperando a MoveIt")
@@ -155,6 +149,7 @@ class LaunchMoveItState(EventState):
                 timeout=5
             )
             
+            # Nodos clave de MoveIt para UR
             moveit_nodes = ['move_group', 'robot_state_publisher']
             for node in moveit_nodes:
                 if node in result.stdout:
@@ -169,9 +164,12 @@ class LaunchMoveItState(EventState):
         """Verifica si RViz está corriendo"""
         try:
             # Buscar por proceso
-            for proc in psutil.process_iter(['pid', 'name']):
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     if 'rviz2' in proc.info['name'].lower():
+                        return True
+                    # También buscar en cmdline por si el nombre es diferente
+                    if proc.info['cmdline'] and any('rviz2' in arg for arg in proc.info['cmdline']):
                         return True
                 except:
                     pass
@@ -184,43 +182,44 @@ class LaunchMoveItState(EventState):
                     text=True,
                     timeout=2
                 )
-                if 'RViz' in result.stdout:
+                if 'RViz' in result.stdout or 'rviz' in result.stdout.lower():
                     return True
             except:
                 pass
                 
-        except:
-            pass
+        except Exception as e:
+            Logger.logwarn(f"⚠️ Error verificando RViz: {e}")
+        
         return False
     
     def _launch_rviz(self):
         """Lanza RViz explícitamente si no está abierto"""
         try:
             # Buscar archivo de configuración de RViz
-            rviz_config = os.path.join(
-                get_package_share_directory(self.moveit_config_package),
-                'config',
-                'moveit.rviz'
-            )
+            rviz_config = None
+            possible_paths = [
+                os.path.join(get_package_share_directory(self.moveit_config_package), 'config', 'moveit.rviz'),
+                os.path.join(get_package_share_directory(self.moveit_config_package), 'config', 'ur5e.rviz'),
+                os.path.join(get_package_share_directory(self.moveit_config_package), 'rviz', 'view_robot.rviz'),
+                os.path.join(get_package_share_directory(self.moveit_config_package), 'launch', 'moveit.rviz'),
+            ]
             
-            if not os.path.exists(rviz_config):
-                # Intentar ubicación alternativa
-                rviz_config = os.path.join(
-                    get_package_share_directory(self.moveit_config_package),
-                    'rviz',
-                    'moveit.rviz'
-                )
+            for path in possible_paths:
+                if os.path.exists(path):
+                    rviz_config = path
+                    Logger.loginfo(f"✅ Encontrada configuración RViz: {path}")
+                    break
             
             cmd = ['ros2', 'run', 'rviz2', 'rviz2']
-            if os.path.exists(rviz_config):
+            if rviz_config:
                 cmd.extend(['-d', rviz_config])
-                Logger.loginfo(f"📁 Usando configuración: {rviz_config}")
             else:
-                Logger.logwarn("⚠️ No se encontró archivo de configuración de RViz")
+                Logger.logwarn("⚠️ No se encontró archivo de configuración de RViz, usando defaults")
             
             # Variables de entorno
             env = os.environ.copy()
             env['DISPLAY'] = ':0'
+            env['XDG_RUNTIME_DIR'] = f'/run/user/{os.getuid()}'
             
             Logger.loginfo(f"🖥️ Lanzando RViz: {' '.join(cmd)}")
             
