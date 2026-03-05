@@ -299,15 +299,15 @@ class ComputeCalibState(EventState):
         
         # Crear transform inverso
         inv = Transform()
-        inv.translation.x = T_inv[0, 3]
-        inv.translation.y = T_inv[1, 3]
-        inv.translation.z = T_inv[2, 3]
+        inv.translation.x = float(T_inv[0, 3])
+        inv.translation.y = float(T_inv[1, 3])
+        inv.translation.z = float(T_inv[2, 3])
         
         quat_inv = tf_transformations.quaternion_from_matrix(T_inv)
-        inv.rotation.x = quat_inv[0]
-        inv.rotation.y = quat_inv[1]
-        inv.rotation.z = quat_inv[2]
-        inv.rotation.w = quat_inv[3]
+        inv.rotation.x = float(quat_inv[0])
+        inv.rotation.y = float(quat_inv[1])
+        inv.rotation.z = float(quat_inv[2])
+        inv.rotation.w = float(quat_inv[3])
         
         return inv
     
@@ -358,32 +358,38 @@ class ComputeCalibState(EventState):
         # Convertir a ángulos de Euler para UR
         euler = tf_transformations.euler_from_quaternion(quat)
         
+        # Convertir matriz a lista de floats nativos (CORREGIDO)
+        transform_matrix = []
+        for row in T.tolist():
+            transform_matrix.append([float(x) for x in row])
+        
+        # Convertir todos los valores numpy a floats nativos (CORREGIDO)
         calib_data = {
             'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
             'robot_model': 'ur5e',
-            'eye_in_hand': self.eye_in_hand_mode,
-            'num_poses_used': num_poses,
-            'transform_matrix': T.tolist(),
+            'eye_in_hand': bool(self.eye_in_hand_mode),  # Convertir a booleano nativo
+            'num_poses_used': int(num_poses),  # Convertir a entero nativo
+            'transform_matrix': transform_matrix,
             'translation': {
-                'x': transform.translation.x,
-                'y': transform.translation.y,
-                'z': transform.translation.z
+                'x': float(transform.translation.x),
+                'y': float(transform.translation.y),
+                'z': float(transform.translation.z)
             },
             'rotation_quaternion': {
-                'x': transform.rotation.x,
-                'y': transform.rotation.y,
-                'z': transform.rotation.z,
-                'w': transform.rotation.w
+                'x': float(transform.rotation.x),
+                'y': float(transform.rotation.y),
+                'z': float(transform.rotation.z),
+                'w': float(transform.rotation.w)
             },
             'rotation_euler_rad': {
-                'roll': euler[0],
-                'pitch': euler[1],
-                'yaw': euler[2]
+                'roll': float(euler[0]),
+                'pitch': float(euler[1]),
+                'yaw': float(euler[2])
             },
             'rotation_euler_deg': {
-                'roll': np.degrees(euler[0]),
-                'pitch': np.degrees(euler[1]),
-                'yaw': np.degrees(euler[2])
+                'roll': float(np.degrees(euler[0])),
+                'pitch': float(np.degrees(euler[1])),
+                'yaw': float(np.degrees(euler[2]))
             }
         }
         
