@@ -3,19 +3,19 @@
 <behavior name="Capture and Calibrate Hand-Eye">
 
     <executable package_path="hand_eye_flexbe_behaviors.capture_and_calibrate_sm" class="CaptureAndCalibrateSM" />
-    <tagstring>v1.0</tagstring>
+    <tagstring>v2.0</tagstring>
     <author>Gabriel Novas</author>
-    <date>2026-02-26</date>
+    <date>2026-03-04</date>
     <description>
         Comportamiento COMPLETO para calibración ojo-mano:
         
         1. AUTO-LANZA: MoveIt + RViz se abren solos
         2. TÚ CONTROLAS: Mueves robot con interfaz de MoveIt
-        3. CAPTURAS: Presionas ESPACIO en cada pose
-        4. AUTO-PROCESA: Detecta Charuco en todas las imágenes
-        5. AUTO-CALIBRA: Calcula calibración final con VISP
+        3. CAPTURAS: Presionas ESPACIO en cada pose (se guardan en /calibrations/extrinsic_calibration/)
+        4. AUTO-DETECTA: charuco_hand_eye detecta Charuco en todas las imágenes
+        5. AUTO-CALIBRA: VISP calcula calibración final
         
-        RESULTADOS: {output_folder}/hand_eye_calibration.yaml
+        RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
     </description>
 
     <!-- Available Parameters -->
@@ -54,16 +54,14 @@
         <param type="text" name="robot_ip" default="192.168.1.101" 
                label="Robot IP" hint="IP del robot UR" />
 
-        <param type="boolean" name="use_fake_hardware" default="True" 
+        <param type="boolean" name="use_fake_hardware" default="False" 
                label="Use Fake Hardware" hint="True para simulación, False para robot real" />
 
-        <!-- Carpeta de salida (ajustada para UR) -->
         <param type="text" name="output_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses" 
+               default="/home/drims/drims_ws/calibrations" 
                label="Output Folder" 
-               hint="Carpeta donde se guardarán los resultados" />
+               hint="Carpeta raíz donde se guardarán los resultados" />
 
-        <!-- Rutas derivadas (no editables) -->
         <param type="text" name="pictures_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
                label="Pictures Folder" hint="Carpeta para imágenes" readonly="true" />
