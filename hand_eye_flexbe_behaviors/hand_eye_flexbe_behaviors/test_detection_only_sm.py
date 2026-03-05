@@ -10,6 +10,7 @@
 from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
+import os
 # [MANUAL_IMPORT]
 # [/MANUAL_IMPORT]
 
@@ -27,7 +28,9 @@ class TestDetectionOnlySM(Behavior):
     - Poses en /calibrations/extrinsic_calibration/robot_poses/
     - Calibración intrínseca de cámara
     
-    RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
+    RESULTADOS: 
+    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (principal)
+    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones)
     """
     
     def __init__(self, node):
@@ -37,12 +40,13 @@ class TestDetectionOnlySM(Behavior):
 
         # Parámetros del comportamiento
         self.add_parameter('eye_in_hand', False)
-        self.add_parameter('calibration_file_name', 'test_calibration.ini')
+        self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # RUTAS - Mismas que en el behavior principal
+        # RUTAS - Definidas correctamente
         base_calib_path = '/home/drims/drims_ws/calibrations'
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
+        self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
         self.add_parameter('output_folder', base_calib_path)
 
         # Inicializar estados
@@ -70,6 +74,7 @@ class TestDetectionOnlySM(Behavior):
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
+                    output_folder=self.charuco_output_folder,
                     eye_in_hand=self.eye_in_hand
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},

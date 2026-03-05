@@ -49,8 +49,9 @@ class ComputeCalibState(EventState):
         self.visp_process = None
         self.calib_client = None
         self._service_ready = False
+        self._node = None
         
-        # Configurar carpetas de salida
+        # Configurar carpetas de salida - ACTUALIZADO
         self.output_folder = output_folder or '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses'
         self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
         os.makedirs(self.calib_results_folder, exist_ok=True)
@@ -64,6 +65,9 @@ class ComputeCalibState(EventState):
             else:
                 self.calibration_file_name = "eye_to_hand_calibration_ur5e.ini"
         
+        # Archivo principal de salida
+        self.main_output_file = '/home/drims/drims_ws/calibrations/camera_extrinsics.yaml'
+        
         # Config parser para INI
         self.config = configparser.ConfigParser()
         self.config.optionxform = str
@@ -74,12 +78,17 @@ class ComputeCalibState(EventState):
         Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
         Logger.loginfo(f"📁 Archivo: {self.calibration_file_name}")
         Logger.loginfo(f"📂 Carpeta: {self.calib_results_folder}")
+        Logger.loginfo(f"📄 Archivo principal: {self.main_output_file}")
         Logger.loginfo(f"🚀 Auto-VISP: {launch_visp}")
     
     def on_start(self):
         """Inicializar: lanzar VISP si es necesario"""
+        # Crear nodo si no existe
+        if not self._node:
+            self._node = rclpy.create_node('compute_calib_state')
+        
         # IMPORTANTE: Primero asegurar que el proxy tiene el nodo
-        ProxyServiceCaller.initialize(ComputeCalibState._node)
+        ProxyServiceCaller.initialize(self._node)
         
         if self.launch_visp:
             self._ensure_visp_running()
@@ -129,18 +138,23 @@ class ComputeCalibState(EventState):
             # Esperar a que inicie
             Logger.loginfo("⏳ Esperando a que VISP inicie...")
             
-            for i in range(10):
+            for i in range(15):  # Aumentado a 15 segundos
                 time.sleep(1)
                 if self._is_visp_running():
                     Logger.loginfo(f"✅ VISP iniciado correctamente después de {i+1}s")
                     return True
-            
-            # Si no responde, verificar stderr
-            stderr = self.visp_process.stderr.read()
-            if stderr:
-                Logger.logerr(f"❌ Error iniciando VISP: {stderr}")
-            return False
                 
+                # Verificar si el proceso falló
+                if self.visp_process.poll() is not None:
+                    stdout, stderr = self.visp_process.communicate()
+                    Logger.logerr(f"❌ VISP terminó prematuramente")
+                    if stderr:
+                        Logger.logerr(f"Error: {stderr}")
+                    return False
+            
+            Logger.logwarn("⚠️ VISP no responde pero podría estar iniciando...")
+            return True  # Asumir que iniciará
+            
         except Exception as e:
             Logger.logerr(f"❌ Error lanzando VISP: {e}")
             return False
@@ -151,18 +165,23 @@ class ComputeCalibState(EventState):
             # Buscar por proceso
             for proc in psutil.process_iter(['pid', 'cmdline']):
                 try:
-                    if proc.info['cmdline'] and 'visp_hand2eye_calibration_calibrator' in ' '.join(proc.info['cmdline']):
+                    if proc.info['cmdline'] and any('visp_hand2eye_calibration_calibrator' in cmd for cmd in proc.info['cmdline'] if cmd):
                         return True
                 except:
                     pass
             
-            # También verificar servicio si ya tenemos cliente
-            if self.calib_client and hasattr(self.calib_client, 'is_available'):
-                try:
-                    if self.calib_client.is_available('/compute_effector_camera_quick'):
-                        return True
-                except:
-                    pass
+            # También verificar servicio
+            try:
+                result = subprocess.run(
+                    ['ros2', 'service', 'list'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if '/compute_effector_camera_quick' in result.stdout:
+                    return True
+            except:
+                pass
                 
         except Exception as e:
             Logger.logwarn(f"⚠️ Error verificando VISP: {e}")
@@ -179,7 +198,10 @@ class ComputeCalibState(EventState):
                 Logger.loginfo("✅ Servicio VISP ahora disponible")
             else:
                 Logger.logwarn("⏳ Esperando a que el servicio VISP esté disponible...")
-                return  # No fallar, solo esperar
+                # Spin para procesar callbacks
+                if self._node:
+                    rclpy.spin_once(self._node, timeout_sec=0.1)
+                return None  # No fallar, solo esperar
         
         # Verificar datos
         if not hasattr(userdata.base_h_tool, 'transforms') or len(userdata.base_h_tool.transforms) == 0:
@@ -251,7 +273,7 @@ class ComputeCalibState(EventState):
             Logger.loginfo(f"   qz = {res.effector_camera.rotation.z:.6f}")
             Logger.loginfo(f"   qw = {res.effector_camera.rotation.w:.6f}")
             
-            # Convertir a ángulos de Euler para UR (opcional)
+            # Convertir a ángulos de Euler para UR
             quat = [res.effector_camera.rotation.x,
                    res.effector_camera.rotation.y,
                    res.effector_camera.rotation.z,
@@ -296,7 +318,7 @@ class ComputeCalibState(EventState):
         return inv
     
     def _save_calibration(self, transform, num_poses):
-        """Guarda la calibración en formato INI y YAML"""
+        """Guarda la calibración en formato INI, YAML y archivo principal"""
         
         # ===== Guardar INI =====
         ini_path = os.path.join(self.calib_results_folder, self.calibration_file_name)
@@ -368,14 +390,20 @@ class ComputeCalibState(EventState):
         }
         
         with open(yaml_path, 'w') as f:
-            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
         
         Logger.loginfo(f"💾 Calibración guardada (YAML): {yaml_path}")
+        
+        # ===== Guardar archivo principal =====
+        with open(self.main_output_file, 'w') as f:
+            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
+        
+        Logger.loginfo(f"💾 Calibración guardada en archivo principal: {self.main_output_file}")
         
         # También guardar una copia en la carpeta raíz de output
         root_yaml = os.path.join(self.output_folder, 'hand_eye_calibration_ur5e.yaml')
         with open(root_yaml, 'w') as f:
-            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
         
         Logger.loginfo(f"💾 Calibración guardada (raíz): {root_yaml}")
     
@@ -384,12 +412,21 @@ class ComputeCalibState(EventState):
         if self.visp_process:
             Logger.loginfo("🛑 Deteniendo VISP...")
             try:
-                self.visp_process.terminate()
-                self.visp_process.wait(timeout=3)
+                os.killpg(os.getpgid(self.visp_process.pid), signal.SIGINT)
+                self.visp_process.wait(timeout=5)
             except:
                 try:
-                    self.visp_process.kill()
+                    self.visp_process.terminate()
+                    self.visp_process.wait(timeout=3)
                 except:
-                    pass
+                    try:
+                        self.visp_process.kill()
+                    except:
+                        pass
             self.visp_process = None
             Logger.loginfo("✅ VISP detenido")
+        
+        # Destruir nodo
+        if self._node:
+            self._node.destroy_node()
+            self._node = None
