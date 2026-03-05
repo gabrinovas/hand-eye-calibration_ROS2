@@ -12,6 +12,7 @@ from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
+import os
 # [MANUAL_IMPORT]
 # [/MANUAL_IMPORT]
 
@@ -30,7 +31,10 @@ class CaptureAndCalibrateSM(Behavior):
     FASE 3: Procesamiento offline con charuco_hand_eye
     FASE 4: Cálculo automático de calibración con VISP
     
-    RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
+    RESULTADOS FINALES:
+    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (calibración principal)
+    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones intermedias)
+    - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (matrices T_w2c y T_c2w)
     """
     
     def __init__(self, node):
@@ -44,7 +48,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('base_frame', 'base_link')
         self.add_parameter('tool_frame', 'tool0')
         self.add_parameter('eye_in_hand', False)
-        self.add_parameter('calibration_file_name', 'hand_eye_calibration.ini')
+        self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
         # Parámetros de MoveIt para UR5e
         self.add_parameter('moveit_launch_file', 'ur_moveit.launch.py')
@@ -57,6 +61,7 @@ class CaptureAndCalibrateSM(Behavior):
         base_calib_path = '/home/drims/drims_ws/calibrations'
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
+        self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
         self.add_parameter('output_folder', base_calib_path)
 
         # Inicializar estados
@@ -102,7 +107,6 @@ class CaptureAndCalibrateSM(Behavior):
                     tool_frame=self.tool_frame,
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
-                    output_folder=self.output_folder,
                     auto_capture=False
                 ),
                 transitions={'done': 'Process_Offline', 'failed': 'failed'},
@@ -113,6 +117,7 @@ class CaptureAndCalibrateSM(Behavior):
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
+                    output_folder=self.charuco_output_folder,
                     eye_in_hand=self.eye_in_hand
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
@@ -127,7 +132,7 @@ class CaptureAndCalibrateSM(Behavior):
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,
                     calibration_file_name=self.calibration_file_name,
-                    customize_file=False,
+                    customize_file=True,
                     launch_visp=True,
                     output_folder=self.output_folder
                 ),
