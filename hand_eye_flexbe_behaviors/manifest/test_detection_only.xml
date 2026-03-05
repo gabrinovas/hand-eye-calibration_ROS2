@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<behavior name="Test Detection Only">
+
+    <executable package_path="hand_eye_flexbe_behaviors.test_detection_only_sm" class="TestDetectionOnlySM" />
+    <tagstring>v1.0</tagstring>
+    <author>Gabriel Novas</author>
+    <date>2026-03-04</date>
+    <description>
+        Behavior de prueba SOLO para detección y calibración.
+        
+        Requiere que ya existan:
+        - Imágenes en /calibrations/extrinsic_calibration/pictures/
+        - Poses en /calibrations/extrinsic_calibration/robot_poses/
+        - Calibración intrínseca de cámara
+        
+        FLUJO:
+        1. Process_Offline: Detecta Charuco en imágenes guardadas
+        2. Compute_Calibration: Calcula calibración con VISP
+        
+        RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
+    </description>
+
+    <!-- Available Parameters -->
+    <params>
+        <param type="boolean" name="eye_in_hand" default="False" 
+               label="Eye-in-Hand" hint="True si cámara en robot" />
+
+        <param type="text" name="calibration_file_name" default="test_calibration.ini" 
+               label="Calibration File" hint="Nombre archivo salida" />
+
+        <!-- RUTAS (solo lectura porque se usan las del behavior principal) -->
+        <param type="text" name="pictures_folder" 
+               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
+               label="Pictures Folder" hint="Carpeta con imágenes" readonly="true" />
+
+        <param type="text" name="robot_poses_folder" 
+               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
+               label="Robot Poses Folder" hint="Carpeta con poses" readonly="true" />
+
+        <param type="text" name="output_folder" 
+               default="/home/drims/drims_ws/calibrations" 
+               label="Output Folder" hint="Carpeta de resultados" readonly="true" />
+    </params>
+
+</behavior>

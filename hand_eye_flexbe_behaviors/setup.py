@@ -33,6 +33,7 @@ setup(
             'camera_calibration_sm = hand_eye_flexbe_behaviors.camera_calibration_sm',
             'capture_and_calibrate_sm = hand_eye_flexbe_behaviors.capture_and_calibrate_sm',
             'manual_hand_eye_calibration_sm = hand_eye_flexbe_behaviors.manual_hand_eye_calibration_sm',
+            'test_detection_only_sm = hand_eye_flexbe_behaviors.test_detection_only_sm',
             'verify_calibraion_sm = hand_eye_flexbe_behaviors.verify_calibraion_sm',
         ],
     },
