@@ -6,15 +6,28 @@
   <name>hand_eye_flexbe_states</name>
   <version>1.0.0</version>
   <description>
-     hand_eye_flexbe_states provides a collection of custom states.
-     Feel free to add new states.
+     Estados FlexBE personalizados para calibración ojo-mano.
+     Incluye estados para captura de poses, lanzamiento de MoveIt,
+     procesamiento offline y cálculo de calibración con VISP.
   </description>
-  <maintainer email="todo@todo.com">TODO</maintainer>
-  <license>BSD</license>
+  <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
+  <license>MIT</license>
 
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>flexbe_core</exec_depend>
+  <exec_depend>flexbe_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf_transformations</exec_depend>
+  <exec_depend>visp_hand2eye_calibration</exec_depend>
+  <exec_depend>charuco_calibrator</exec_depend>
+  <exec_depend>psutil</exec_depend>
+  <exec_depend>pyrealsense2</exec_depend>
+  <exec_depend>opencv-python</exec_depend>
+  <exec_depend>pyyaml</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
@@ -24,11 +37,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-  <depend>charuco_calibrator</depend>
-
   <export>
-      <flexbe_states />
-      <build_type>ament_cmake</build_type>
+    <flexbe_states />
+    <build_type>ament_cmake</build_type>
   </export>
-
 </package>

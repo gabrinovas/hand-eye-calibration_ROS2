@@ -6,26 +6,29 @@
   <name>hand_eye_flexbe_behaviors</name>
   <version>1.0.0</version>
   <description>
-     hand_eye_flexbe_behaviors references all implemented behaviors.
+     Comportamientos FlexBE para calibración ojo-mano.
+     Incluye calibración manual y automática con MoveIt.
   </description>
-  <maintainer email="todo@todo.com">TODO</maintainer>
-  <license>BSD</license>
+  <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
+  <license>MIT</license>
 
-    <exec_depend>rclcpp</exec_depend>
-    <exec_depend>rclpy</exec_depend>
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>flexbe_core</exec_depend>
+  <exec_depend>flexbe_msgs</exec_depend>
+  <exec_depend>hand_eye_flexbe_states</exec_depend>
+  <exec_depend>charuco_calibrator</exec_depend>
 
-    <test_depend>ament_copyright</test_depend>
-    <test_depend>ament_flake8</test_depend>
-    <test_depend>ament_pep257</test_depend>
-    <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
-    <buildtool_depend>ament_cmake</buildtool_depend>
-    <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-    <depend>charuco_calibrator</depend>
-
-    <export>
-        <flexbe_behaviors />
-        <build_type>ament_cmake</build_type>
-    </export>
+  <export>
+    <flexbe_behaviors />
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

@@ -1,186 +1,478 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""
+Estado FlexBE para calcular calibración ojo-mano con VISP.
+Lanza VISP automáticamente si no está corriendo.
+Adaptado para UR5e.
+"""
 
-import configparser,os
-import numpy
-import math
-# import tf
+import configparser
+import yaml
+import os
+import subprocess
+import time
+import psutil
+import numpy as np
+import signal
 from geometry_msgs.msg import Transform
 from visp_hand2eye_calibration.msg import TransformArray
-from flexbe_core import EventState
-from flexbe_core.proxy import ProxyServiceCaller
-from ament_index_python.packages import get_package_share_directory
 from visp_hand2eye_calibration.srv import ComputeEffectorCameraQuick
-
+from flexbe_core import EventState, Logger
+from flexbe_core.proxy import ProxyServiceCaller
+import tf_transformations
 
 class ComputeCalibState(EventState):
     """
-    Output a fixed pose to move.
-
-    <= done									   Pose has been published.
-    <= fail									   Task fail and finished
-
+    Calcula calibración ojo-mano con VISP (auto-lanzado).
+    
+    -- eye_in_hand_mode      bool     True: eye-in-hand
+    -- calibration_file_name string   Nombre archivo salida
+    -- customize_file        bool     Usar nombre personalizado
+    -- launch_visp           bool     Lanzar VISP automáticamente
+    -- output_folder         string   Carpeta de salida
+    
+    ># base_h_tool           TransformArray  Poses robot (base→tool)
+    ># camera_h_charuco      TransformArray  Poses tablero (cámara→charuco)
+    
+    <= finish                Calibración completada
+    <= failed                Error
     """
     
-    def __init__(self, eye_in_hand_mode, calibration_file_name, customize_file):
-        """Constructor"""
-        super(ComputeCalibState, self).__init__(outcomes=['finish'], input_keys=['base_h_tool', 'camera_h_charuco'])
+    def __init__(self, eye_in_hand_mode, calibration_file_name, 
+                 customize_file=False, launch_visp=True, output_folder=None):
+        super().__init__(
+            outcomes=['finish', 'failed'],
+            input_keys=['base_h_tool', 'camera_h_charuco']
+        )
+        
         self.eye_in_hand_mode = eye_in_hand_mode
-        self.camera_object_list = TransformArray()
-        self.world_effector_list = TransformArray()
-        ProxyServiceCaller._initialize(ComputeCalibState._node)
-        self.calib_compute_client = ProxyServiceCaller({'/compute_effector_camera_quick':ComputeEffectorCameraQuick})
-        self.save_pwd = get_package_share_directory('charuco_detector') + '/config/hand_eye_calibration/'
-        self.config = configparser.ConfigParser()
-        self.config.optionxform = str #reference: http://docs.python.org/library/configparser.html
-
+        self.launch_visp = launch_visp
+        self.visp_process = None
+        self.calib_client = None
+        self._service_ready = False
+        
+        # Configurar carpetas de salida
+        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations'
+        self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
+        os.makedirs(self.calib_results_folder, exist_ok=True)
+        
+        # Archivo de salida
         if customize_file:
-            self.calibration_file_name = str(calibration_file_name)
-            with open(self.save_pwd+ self.calibration_file_name, 'w') as file:
-                self.config.write(file)
+            # Si ya tiene extensión, la quitamos para manejar consistencia
+            base_name = str(calibration_file_name)
+            if base_name.endswith('.ini') or base_name.endswith('.yaml'):
+                base_name = os.path.splitext(base_name)[0]
+            self.calibration_base_name = base_name
         else:
             if eye_in_hand_mode:
-                self.calibration_file_name = "eye_in_hand_calibration.ini"
+                self.calibration_base_name = "eye_in_hand_calibration_ur5e"
             else:
-                self.calibration_file_name = "eye_to_hand_calibration.ini"
-
-
+                self.calibration_base_name = "eye_to_hand_calibration_ur5e"
+        
+        # Archivos de salida con extensiones correctas
+        self.ini_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.ini")
+        self.yaml_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.yaml")
+        
+        # Archivo principal de salida
+        self.main_output_file = '/home/drims/drims_ws/calibrations/camera_extrinsics.yaml'
+        
+        # Archivo de detecciones duplicado a eliminar
+        self.temp_detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+        
+        # Config parser para INI
+        self.config = configparser.ConfigParser()
+        self.config.optionxform = str
+        
+        Logger.loginfo("="*60)
+        Logger.loginfo("🔧 ESTADO: ComputeCalibState (UR5e)")
+        Logger.loginfo("="*60)
+        Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
+        Logger.loginfo(f"📁 Archivo base: {self.calibration_base_name}")
+        Logger.loginfo(f"📂 Carpeta: {self.calib_results_folder}")
+        Logger.loginfo(f"📄 Archivo INI: {self.ini_file}")
+        Logger.loginfo(f"📄 Archivo YAML: {self.yaml_file}")
+        Logger.loginfo(f"📄 Archivo principal: {self.main_output_file}")
+        Logger.loginfo(f"📄 Archivo temp a eliminar: {self.temp_detections_file}")
+        Logger.loginfo(f"🚀 Auto-VISP: {launch_visp}")
+    
+    def on_start(self):
+        """Inicializar: lanzar VISP si es necesario"""
+        # Inicializar el proxy con el nodo de FlexBE
+        ProxyServiceCaller.initialize(ComputeCalibState._node)
+        
+        if self.launch_visp:
+            self._ensure_visp_running()
+        
+        # Ahora crear el cliente
+        self.calib_client = ProxyServiceCaller({
+            '/compute_effector_camera_quick': ComputeEffectorCameraQuick
+        })
+        
+        # Verificar que el servicio está disponible
+        if self.calib_client.is_available('/compute_effector_camera_quick'):
+            self._service_ready = True
+            Logger.loginfo("✅ Servicio VISP disponible")
+        else:
+            Logger.logwarn("⏳ Esperando servicio VISP...")
+    
+    def _ensure_visp_running(self):
+        """Lanza VISP si no está corriendo"""
+        if self._is_visp_running():
+            Logger.loginfo("✅ VISP ya está corriendo")
+            return True
+        
+        Logger.loginfo("🚀 Lanzando nodo VISP...")
+        
+        try:
+            # Convertir booleano a string 'true'/'false' para ROS2
+            eye_in_hand_str = 'true' if self.eye_in_hand_mode else 'false'
+            
+            cmd = [
+                'ros2', 'run', 
+                'visp_hand2eye_calibration', 
+                'visp_hand2eye_calibration_calibrator',
+                '--ros-args',
+                '-p', f'eye_in_hand:={eye_in_hand_str}',
+                '-p', 'camera_frame:=camera_color_optical_frame',
+                '-p', 'marker_frame:=charuco_frame'
+            ]
+            
+            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
+            
+            self.visp_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                text=True
+            )
+            
+            # Esperar a que inicie
+            Logger.loginfo("⏳ Esperando a que VISP inicie...")
+            
+            for i in range(15):
+                time.sleep(1)
+                if self._is_visp_running():
+                    Logger.loginfo(f"✅ VISP iniciado correctamente después de {i+1}s")
+                    return True
+                
+                # Verificar si el proceso falló
+                if self.visp_process.poll() is not None:
+                    stdout, stderr = self.visp_process.communicate()
+                    Logger.logerr(f"❌ VISP terminó prematuramente")
+                    if stderr:
+                        Logger.logerr(f"Error: {stderr}")
+                    return False
+            
+            Logger.logwarn("⚠️ VISP no responde pero podría estar iniciando...")
+            return True
+            
+        except Exception as e:
+            Logger.logerr(f"❌ Error lanzando VISP: {e}")
+            return False
+    
+    def _is_visp_running(self):
+        """Verifica si VISP está corriendo"""
+        try:
+            # Buscar por proceso
+            for proc in psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    if proc.info['cmdline'] and any('visp_hand2eye_calibration_calibrator' in cmd for cmd in proc.info['cmdline'] if cmd):
+                        return True
+                except:
+                    pass
+            
+            # También verificar servicio
+            try:
+                result = subprocess.run(
+                    ['ros2', 'service', 'list'],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if '/compute_effector_camera_quick' in result.stdout:
+                    return True
+            except:
+                pass
+                
+        except Exception as e:
+            Logger.logwarn(f"⚠️ Error verificando VISP: {e}")
+        
+        return False
     
     def execute(self, userdata):
-        req = ComputeEffectorCameraQuick.Request()
-        req.camera_object = self.camera_object_list
-        req.world_effector = self.world_effector_list
-        print ("========================================================================================================")
-        res = self.calib_compute_client.call('/compute_effector_camera_quick', req)
+        """Ejecuta la calibración con los datos recibidos"""
         
-        print('x = '  + str(res.effector_camera.translation.x))
-        print('y = '  + str(res.effector_camera.translation.y))
-        print('z = '  + str(res.effector_camera.translation.z))
-        print('qx = ' + str(res.effector_camera.rotation.x))
-        print('qy = ' + str(res.effector_camera.rotation.y))
-        print('qz = ' + str(res.effector_camera.rotation.z))
-        print('qw = ' + str(res.effector_camera.rotation.w))
-
-        # config = configparser.ConfigParser()
-        # config.optionxform = str #reference: http://docs.python.org/library/configparser.html
-        self.config.read(self.save_pwd + self.calibration_file_name)
-        # config.read(curr_path + '/config/hand_eye_calibration/'+ self.calibration_file_name)
-
-        if self.config.get("hand_eye_calibration" ,"x") != None:
-            pass
-        else:
-            self.config.add_section("hand_eye_calibration")
-        self.config.set("hand_eye_calibration", "x",  str(res.effector_camera.translation.x))
-        self.config.set("hand_eye_calibration", "y",  str(res.effector_camera.translation.y))
-        self.config.set("hand_eye_calibration", "z",  str(res.effector_camera.translation.z))
-        self.config.set("hand_eye_calibration", "qx", str(res.effector_camera.rotation.x))
-        self.config.set("hand_eye_calibration", "qy", str(res.effector_camera.rotation.y))
-        self.config.set("hand_eye_calibration", "qz", str(res.effector_camera.rotation.z))
-        self.config.set("hand_eye_calibration", "qw", str(res.effector_camera.rotation.w))
-
-        with open(self.save_pwd+ self.calibration_file_name, 'w') as file:
-            self.config.write(file)
-        return 'finish'
-    
-    def on_enter(self, userdata):
+        # Verificar que el servicio está listo
+        if not self._service_ready:
+            if self.calib_client and self.calib_client.is_available('/compute_effector_camera_quick'):
+                self._service_ready = True
+                Logger.loginfo("✅ Servicio VISP ahora disponible")
+            else:
+                Logger.logwarn("⏳ Esperando a que el servicio VISP esté disponible...")
+                return None  # No fallar, solo esperar
+        
+        # Verificar datos
+        if not hasattr(userdata.base_h_tool, 'transforms') or len(userdata.base_h_tool.transforms) == 0:
+            Logger.logerr("❌ No se recibieron poses del robot")
+            return 'failed'
+        
+        if not hasattr(userdata.camera_h_charuco, 'transforms') or len(userdata.camera_h_charuco.transforms) == 0:
+            Logger.logerr("❌ No se recibieron poses del tablero")
+            return 'failed'
+        
+        # Verificar que coincidan número de poses
+        if len(userdata.base_h_tool.transforms) != len(userdata.camera_h_charuco.transforms):
+            Logger.logerr(f"❌ Número de poses no coincide: robot={len(userdata.base_h_tool.transforms)}, tablero={len(userdata.camera_h_charuco.transforms)}")
+            return 'failed'
+        
+        num_poses = len(userdata.base_h_tool.transforms)
+        Logger.loginfo(f"📊 Calibrando con {num_poses} poses")
+        
+        # Verificar servicio disponible
+        if not self.calib_client.is_available('/compute_effector_camera_quick'):
+            Logger.logerr("❌ Servicio de VISP no disponible")
+            return 'failed'
+        
+        # Preparar request
+        req = ComputeEffectorCameraQuick.Request()
+        req.camera_object = TransformArray()
+        req.world_effector = TransformArray()
+        req.camera_object.header = userdata.camera_h_charuco.header
+        req.world_effector.header = userdata.base_h_tool.header
+        
+        # Procesar según modo
         if self.eye_in_hand_mode:
-            print("------------------------------------------------------------------")
-            self.world_effector_list = userdata.base_h_tool
-            self.camera_object_list = userdata.camera_h_charuco
-            # print(self.camera_object_list)
-            # print(self.world_effector_list)
+            # Modo eye-in-hand: usar directamente
+            Logger.loginfo("🔄 Modo Eye-in-hand: usando poses directamente")
+            req.world_effector.transforms = userdata.base_h_tool.transforms
+            req.camera_object.transforms = userdata.camera_h_charuco.transforms
         else:
-            self.world_effector_list.header = userdata.base_h_tool.header
-            print ("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            print (userdata.base_h_tool)
-
-            self.camera_object_list.header = userdata.camera_h_charuco.header
-
-            for transform in userdata.base_h_tool.transforms:
-                trans = self.quaternion_matrix([transform.rotation.x, transform.rotation.y,
-                                                              transform.rotation.z, transform.rotation.w])
-                trans[0:3, 3] = [transform.translation.x, transform.translation.y, transform.translation.z]
-                trans = self.inverse_matrix(trans)
-                trans_B = Transform()
-                trans_B.translation.x, trans_B.translation.y, trans_B.translation.z = trans[:3, 3]
-                trans_B.rotation.x, trans_B.rotation.y, trans_B.rotation.z, \
-                    trans_B.rotation.w = self.quaternion_from_matrix(trans)
-                self.world_effector_list.transforms.append(trans_B)
-
-            for transform in userdata.camera_h_charuco.transforms:
-                trans = self.quaternion_matrix([transform.rotation.x, transform.rotation.y,
-                                                              transform.rotation.z, transform.rotation.w])
-                trans[0:3, 3] = [transform.translation.x, transform.translation.y, transform.translation.z]
-                trans = self.inverse_matrix(trans)
-                trans_C = Transform()
-                trans_C.translation.x, trans_C.translation.y, trans_C.translation.z = trans[:3, 3]
-                trans_C.rotation.x, trans_C.rotation.y, trans_C.rotation.z, \
-                    trans_C.rotation.w = self.quaternion_from_matrix(trans)
-                self.camera_object_list.transforms.append(trans_C)
-
-    def quaternion_matrix(self, quaternion):
-        """Return homogeneous rotation matrix from quaternion.
+            # Modo eye-to-hand: invertir transforms
+            Logger.loginfo("🔄 Modo Eye-to-hand: invirtiendo transforms")
+            
+            for t in userdata.base_h_tool.transforms:
+                inv = self._invert_transform(t)
+                req.world_effector.transforms.append(inv)
+            
+            for t in userdata.camera_h_charuco.transforms:
+                inv = self._invert_transform(t)
+                req.camera_object.transforms.append(inv)
+        
+        try:
+            # Llamar al servicio
+            Logger.loginfo("📡 Llamando a servicio de calibración VISP...")
+            res = self.calib_client.call('/compute_effector_camera_quick', req)
+            
+            if res is None:
+                Logger.logerr("❌ El servicio no devolvió respuesta")
+                return 'failed'
+            
+            # Mostrar resultado
+            Logger.loginfo("="*60)
+            Logger.loginfo("✅ CALIBRACIÓN COMPLETADA - UR5e")
+            Logger.loginfo("="*60)
+            Logger.loginfo(f"📐 Traslación (metros):")
+            Logger.loginfo(f"   x = {res.effector_camera.translation.x:.6f}")
+            Logger.loginfo(f"   y = {res.effector_camera.translation.y:.6f}")
+            Logger.loginfo(f"   z = {res.effector_camera.translation.z:.6f}")
+            Logger.loginfo(f"🌀 Cuaternión:")
+            Logger.loginfo(f"   qx = {res.effector_camera.rotation.x:.6f}")
+            Logger.loginfo(f"   qy = {res.effector_camera.rotation.y:.6f}")
+            Logger.loginfo(f"   qz = {res.effector_camera.rotation.z:.6f}")
+            Logger.loginfo(f"   qw = {res.effector_camera.rotation.w:.6f}")
+            
+            # Convertir a ángulos de Euler para UR
+            quat = [res.effector_camera.rotation.x,
+                   res.effector_camera.rotation.y,
+                   res.effector_camera.rotation.z,
+                   res.effector_camera.rotation.w]
+            euler = tf_transformations.euler_from_quaternion(quat)
+            Logger.loginfo(f"📐 Ángulos Euler (rad):")
+            Logger.loginfo(f"   roll = {euler[0]:.6f}, pitch = {euler[1]:.6f}, yaw = {euler[2]:.6f}")
+            
+            # Guardar resultado
+            self._save_calibration(res.effector_camera, num_poses)
+            
+            # Eliminar archivo temporal de detecciones
+            self._cleanup_temp_files()
+            
+            return 'finish'
+            
+        except Exception as e:
+            Logger.logerr(f"❌ Error en calibración: {e}")
+            return 'failed'
     
-        >>> R = quaternion_matrix([0.06146124, 0, 0, 0.99810947])
-        >>> numpy.allclose(R, rotation_matrix(0.123, (1, 0, 0)))
-        True
+    def _invert_transform(self, t):
+        """Invierte una transformación"""
+        # Matriz homogénea
+        T = np.eye(4)
+        quat = [t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]
+        R = tf_transformations.quaternion_matrix(quat)[:3, :3]
+        T[:3, :3] = R
+        T[:3, 3] = [t.translation.x, t.translation.y, t.translation.z]
+        
+        # Invertir
+        T_inv = np.linalg.inv(T)
+        
+        # Crear transform inverso
+        inv = Transform()
+        inv.translation.x = float(T_inv[0, 3])
+        inv.translation.y = float(T_inv[1, 3])
+        inv.translation.z = float(T_inv[2, 3])
+        
+        quat_inv = tf_transformations.quaternion_from_matrix(T_inv)
+        inv.rotation.x = float(quat_inv[0])
+        inv.rotation.y = float(quat_inv[1])
+        inv.rotation.z = float(quat_inv[2])
+        inv.rotation.w = float(quat_inv[3])
+        
+        return inv
     
-        """
-        q = numpy.array(quaternion[:4], dtype=numpy.float64, copy=True)
-        nq = numpy.dot(q, q)
-        if nq < numpy.finfo(float).eps * 4.0:
-            return numpy.identity(4)
-        q *= math.sqrt(2.0 / nq)
-        q = numpy.outer(q, q)
-        return numpy.array((
-            (1.0-q[1, 1]-q[2, 2],     q[0, 1]-q[2, 3],     q[0, 2]+q[1, 3], 0.0),
-            (q[0, 1]+q[2, 3], 1.0-q[0, 0]-q[2, 2],     q[1, 2]-q[0, 3], 0.0),
-            (q[0, 2]-q[1, 3],     q[1, 2]+q[0, 3], 1.0-q[0, 0]-q[1, 1], 0.0),
-            (0.0,                 0.0,                 0.0, 1.0)
-        ), dtype=numpy.float64)
+    def _cleanup_temp_files(self):
+        """Elimina archivos temporales después de la calibración"""
+        try:
+            if os.path.exists(self.temp_detections_file):
+                os.remove(self.temp_detections_file)
+                Logger.loginfo(f"🧹 Archivo temporal eliminado: {self.temp_detections_file}")
+            else:
+                Logger.loginfo(f"📂 Archivo temporal no encontrado (ya eliminado): {self.temp_detections_file}")
+        except Exception as e:
+            Logger.logwarn(f"⚠️ No se pudo eliminar el archivo temporal {self.temp_detections_file}: {e}")
     
-    def quaternion_from_matrix(self, matrix):
-        """Return quaternion from rotation matrix.
+    def _save_calibration(self, transform, num_poses):
+        """Guarda la calibración en formato INI, YAML y archivo principal"""
+        
+        # ===== Guardar INI =====
+        ini_path = self.ini_file
+        
+        if os.path.exists(ini_path):
+            self.config.read(ini_path)
+        
+        if not self.config.has_section("hand_eye_calibration"):
+            self.config.add_section("hand_eye_calibration")
+        
+        self.config.set("hand_eye_calibration", "x", str(transform.translation.x))
+        self.config.set("hand_eye_calibration", "y", str(transform.translation.y))
+        self.config.set("hand_eye_calibration", "z", str(transform.translation.z))
+        self.config.set("hand_eye_calibration", "qx", str(transform.rotation.x))
+        self.config.set("hand_eye_calibration", "qy", str(transform.rotation.y))
+        self.config.set("hand_eye_calibration", "qz", str(transform.rotation.z))
+        self.config.set("hand_eye_calibration", "qw", str(transform.rotation.w))
+        self.config.set("hand_eye_calibration", "num_poses_used", str(num_poses))
+        self.config.set("hand_eye_calibration", "eye_in_hand", str(self.eye_in_hand_mode))
+        self.config.set("hand_eye_calibration", "robot_model", "ur5e")
+        self.config.set("hand_eye_calibration", "timestamp", str(time.time()))
+        
+        with open(ini_path, 'w') as f:
+            self.config.write(f)
+        
+        Logger.loginfo(f"💾 Calibración guardada (INI): {ini_path}")
+        
+        # ===== Guardar YAML =====
+        yaml_path = self.yaml_file
+        
+        # Matriz de transformación completa
+        T = np.eye(4)
+        quat = [transform.rotation.x, transform.rotation.y, 
+                transform.rotation.z, transform.rotation.w]
+        R = tf_transformations.quaternion_matrix(quat)[:3, :3]
+        T[:3, :3] = R
+        T[:3, 3] = [transform.translation.x, transform.translation.y, transform.translation.z]
+        
+        # Convertir a ángulos de Euler para UR
+        euler = tf_transformations.euler_from_quaternion(quat)
+        
+        # Convertir matriz a lista de floats nativos
+        transform_matrix = []
+        for row in T.tolist():
+            transform_matrix.append([float(x) for x in row])
+        
+        # Convertir todos los valores numpy a floats nativos
+        calib_data = {
+            'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'robot_model': 'ur5e',
+            'eye_in_hand': bool(self.eye_in_hand_mode),
+            'num_poses_used': int(num_poses),
+            'transform_matrix': transform_matrix,
+            'translation': {
+                'x': float(transform.translation.x),
+                'y': float(transform.translation.y),
+                'z': float(transform.translation.z)
+            },
+            'rotation_quaternion': {
+                'x': float(transform.rotation.x),
+                'y': float(transform.rotation.y),
+                'z': float(transform.rotation.z),
+                'w': float(transform.rotation.w)
+            },
+            'rotation_euler_rad': {
+                'roll': float(euler[0]),
+                'pitch': float(euler[1]),
+                'yaw': float(euler[2])
+            },
+            'rotation_euler_deg': {
+                'roll': float(np.degrees(euler[0])),
+                'pitch': float(np.degrees(euler[1])),
+                'yaw': float(np.degrees(euler[2]))
+            }
+        }
+        
+        with open(yaml_path, 'w') as f:
+            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
+        
+        Logger.loginfo(f"💾 Calibración guardada (YAML): {yaml_path}")
+        
+        # ===== Guardar archivo principal =====
+        with open(self.main_output_file, 'w') as f:
+            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
+        
+        Logger.loginfo(f"💾 Calibración guardada en archivo principal: {self.main_output_file}")
+        
+        # ===== Guardar extrinsic_matrix.yaml con formato específico =====
+        extrinsic_file = os.path.join(self.output_folder, 'extrinsic_matrix.yaml')
+        
+        # Calcular T_c2w (inversa de T)
+        T_c2w = np.linalg.inv(T)
+        
+        # Convertir matrices a listas planas de 16 elementos
+        T_w2c_flat = T.flatten().tolist()
+        T_c2w_flat = T_c2w.flatten().tolist()
+        
+        # Convertir todos los valores a float nativo con alta precisión
+        T_w2c_flat = [float(x) for x in T_w2c_flat]
+        T_c2w_flat = [float(x) for x in T_c2w_flat]
+        
+        # Crear estructura con clave 'camera' e índice 1
+        extrinsic_data = {
+            'camera': {
+                1: {
+                    'T_c2w': T_c2w_flat,
+                    'T_w2c': T_w2c_flat
+                }
+            }
+        }
+        
+        with open(extrinsic_file, 'w') as f:
+            # Usar default_flow_style=None para formato legible pero compacto
+            yaml.dump(extrinsic_data, f, default_flow_style=None, sort_keys=False, indent=2)
+        
+        Logger.loginfo(f"💾 Matriz extrínseca guardada en: {extrinsic_file}")
     
-        >>> R = rotation_matrix(0.123, (1, 2, 3))
-        >>> q = quaternion_from_matrix(R)
-        >>> numpy.allclose(q, [0.0164262, 0.0328524, 0.0492786, 0.9981095])
-        True
-    
-        """
-        q = numpy.empty((4, ), dtype=numpy.float64)
-        M = numpy.array(matrix, dtype=numpy.float64, copy=False)[:4, :4]
-        t = numpy.trace(M)
-        if t > M[3, 3]:
-            q[3] = t
-            q[2] = M[1, 0] - M[0, 1]
-            q[1] = M[0, 2] - M[2, 0]
-            q[0] = M[2, 1] - M[1, 2]
-        else:
-            i, j, k = 0, 1, 2
-            if M[1, 1] > M[0, 0]:
-                i, j, k = 1, 2, 0
-            if M[2, 2] > M[i, i]:
-                i, j, k = 2, 0, 1
-            t = M[i, i] - (M[j, j] + M[k, k]) + M[3, 3]
-            q[i] = t
-            q[j] = M[i, j] + M[j, i]
-            q[k] = M[k, i] + M[i, k]
-            q[3] = M[k, j] - M[j, k]
-        q *= 0.5 / math.sqrt(t * M[3, 3])
-        return q
-    
-    def inverse_matrix(self, matrix):
-        """Return inverse of square transformation matrix.
-    
-        >>> M0 = random_rotation_matrix()
-        >>> M1 = inverse_matrix(M0.T)
-        >>> numpy.allclose(M1, numpy.linalg.inv(M0.T))
-        True
-        >>> for size in range(1, 7):
-        ...     M0 = numpy.random.rand(size, size)
-        ...     M1 = inverse_matrix(M0)
-        ...     if not numpy.allclose(M1, numpy.linalg.inv(M0)): print size
-    
-        """
-        return numpy.linalg.inv(matrix)
-
+    def on_stop(self):
+        """Limpiar proceso de VISP al terminar"""
+        if self.visp_process:
+            Logger.loginfo("🛑 Deteniendo VISP...")
+            try:
+                os.killpg(os.getpgid(self.visp_process.pid), signal.SIGINT)
+                self.visp_process.wait(timeout=5)
+            except:
+                try:
+                    self.visp_process.terminate()
+                    self.visp_process.wait(timeout=3)
+                except:
+                    try:
+                        self.visp_process.kill()
+                    except:
+                        pass
+            self.visp_process = None
+            Logger.loginfo("✅ VISP detenido")
