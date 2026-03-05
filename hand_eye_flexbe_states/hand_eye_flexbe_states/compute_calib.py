@@ -57,12 +57,20 @@ class ComputeCalibState(EventState):
         
         # Archivo de salida
         if customize_file:
-            self.calibration_file_name = str(calibration_file_name)
+            # Si ya tiene extensión, la quitamos para manejar consistencia
+            base_name = str(calibration_file_name)
+            if base_name.endswith('.ini') or base_name.endswith('.yaml'):
+                base_name = os.path.splitext(base_name)[0]
+            self.calibration_base_name = base_name
         else:
             if eye_in_hand_mode:
-                self.calibration_file_name = "eye_in_hand_calibration_ur5e.ini"
+                self.calibration_base_name = "eye_in_hand_calibration_ur5e"
             else:
-                self.calibration_file_name = "eye_to_hand_calibration_ur5e.ini"
+                self.calibration_base_name = "eye_to_hand_calibration_ur5e"
+        
+        # Archivos de salida con extensiones correctas
+        self.ini_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.ini")
+        self.yaml_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.yaml")
         
         # Archivo principal de salida
         self.main_output_file = '/home/drims/drims_ws/calibrations/camera_extrinsics.yaml'
@@ -78,8 +86,10 @@ class ComputeCalibState(EventState):
         Logger.loginfo("🔧 ESTADO: ComputeCalibState (UR5e)")
         Logger.loginfo("="*60)
         Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
-        Logger.loginfo(f"📁 Archivo: {self.calibration_file_name}")
+        Logger.loginfo(f"📁 Archivo base: {self.calibration_base_name}")
         Logger.loginfo(f"📂 Carpeta: {self.calib_results_folder}")
+        Logger.loginfo(f"📄 Archivo INI: {self.ini_file}")
+        Logger.loginfo(f"📄 Archivo YAML: {self.yaml_file}")
         Logger.loginfo(f"📄 Archivo principal: {self.main_output_file}")
         Logger.loginfo(f"📄 Archivo temp a eliminar: {self.temp_detections_file}")
         Logger.loginfo(f"🚀 Auto-VISP: {launch_visp}")
@@ -333,11 +343,7 @@ class ComputeCalibState(EventState):
         """Guarda la calibración en formato INI, YAML y archivo principal"""
         
         # ===== Guardar INI =====
-        ini_filename = self.calibration_file_name
-        if not ini_filename.endswith('.ini'):
-            ini_filename += '.ini'
-        
-        ini_path = os.path.join(self.calib_results_folder, ini_filename)
+        ini_path = self.ini_file
         
         if os.path.exists(ini_path):
             self.config.read(ini_path)
@@ -363,7 +369,7 @@ class ComputeCalibState(EventState):
         Logger.loginfo(f"💾 Calibración guardada (INI): {ini_path}")
         
         # ===== Guardar YAML =====
-        yaml_path = ini_path.replace('.ini', '.yaml')
+        yaml_path = self.yaml_file
         
         # Matriz de transformación completa
         T = np.eye(4)
