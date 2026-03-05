@@ -358,17 +358,17 @@ class ComputeCalibState(EventState):
         # Convertir a ángulos de Euler para UR
         euler = tf_transformations.euler_from_quaternion(quat)
         
-        # Convertir matriz a lista de floats nativos (CORREGIDO)
+        # Convertir matriz a lista de floats nativos
         transform_matrix = []
         for row in T.tolist():
             transform_matrix.append([float(x) for x in row])
         
-        # Convertir todos los valores numpy a floats nativos (CORREGIDO)
+        # Convertir todos los valores numpy a floats nativos
         calib_data = {
             'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
             'robot_model': 'ur5e',
-            'eye_in_hand': bool(self.eye_in_hand_mode),  # Convertir a booleano nativo
-            'num_poses_used': int(num_poses),  # Convertir a entero nativo
+            'eye_in_hand': bool(self.eye_in_hand_mode),
+            'num_poses_used': int(num_poses),
             'transform_matrix': transform_matrix,
             'translation': {
                 'x': float(transform.translation.x),
@@ -404,12 +404,30 @@ class ComputeCalibState(EventState):
         
         Logger.loginfo(f"💾 Calibración guardada en archivo principal: {self.main_output_file}")
         
-        # También guardar una copia en la carpeta raíz de output
-        root_yaml = os.path.join(self.output_folder, 'hand_eye_calibration_ur5e.yaml')
-        with open(root_yaml, 'w') as f:
-            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
+        # ===== Guardar extrinsic_matrix.yaml con formato específico =====
+        extrinsic_file = os.path.join(self.output_folder, 'extrinsic_matrix.yaml')
         
-        Logger.loginfo(f"💾 Calibración guardada (raíz): {root_yaml}")
+        # Calcular T_c2w (inversa de T)
+        T_c2w = np.linalg.inv(T)
+        
+        # Convertir matrices a listas planas de 16 elementos
+        T_w2c_flat = T.flatten().tolist()
+        T_c2w_flat = T_c2w.flatten().tolist()
+        
+        # Convertir todos los valores a float nativo con alta precisión
+        T_w2c_flat = [float(x) for x in T_w2c_flat]
+        T_c2w_flat = [float(x) for x in T_c2w_flat]
+        
+        extrinsic_data = {
+            'T_w2c': T_w2c_flat,
+            'T_c2w': T_c2w_flat
+        }
+        
+        with open(extrinsic_file, 'w') as f:
+            # Usar default_flow_style=True para formato compacto en una línea
+            yaml.dump(extrinsic_data, f, default_flow_style=True, width=float("inf"))
+        
+        Logger.loginfo(f"💾 Matriz extrínseca guardada en: {extrinsic_file}")
     
     def on_stop(self):
         """Limpiar proceso de VISP al terminar"""
