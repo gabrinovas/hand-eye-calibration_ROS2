@@ -1,62 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<behavior name="camera_calibration">
+<behavior name="Capture and Calibrate Hand-Eye">
 
-	<executable package_path="hand_eye_flexbe_behaviors.camera_calibration_sm" class="camera_calibrationSM" />
-	<tagstring>Calibración de cámara con tablero Charuco</tagstring>
-	<author>Gabriel</author>
-	<date>Tue Nov 15 2022 (Modificado: Feb 2026)</date>
-	<description>
-		Comportamiento para calibración de cámara usando tablero Charuco.
-		
-		Flujo:
-		1. Toma manual de fotos del tablero Charuco en diferentes posiciones
-		2. Calibración automática de la cámara usando charuco_calibrator
-		3. Guardado de resultados en ~/drims_ws/calibrations/camera_intrinsics.yaml
-		
-		Controles durante captura:
-		- ESPACIO o ENTER: Tomar foto
-		- ESC: Cancelar
-	</description>
+    <executable package_path="hand_eye_flexbe_behaviors.capture_and_calibrate_sm" class="CaptureAndCalibrateSM" />
+    <tagstring>v2.0</tagstring>
+    <author>Gabriel Novas</author>
+    <date>2026-03-04</date>
+    <description>
+        Comportamiento COMPLETO para calibración ojo-mano:
+        
+        1. AUTO-LANZA: MoveIt + RViz se abren solos
+        2. TÚ CONTROLAS: Mueves robot con interfaz de MoveIt
+        3. CAPTURAS: Presionas ESPACIO en cada pose (se guardan en /calibrations/extrinsic_calibration/)
+        4. AUTO-DETECTA: charuco_hand_eye detecta Charuco en todas las imágenes
+        5. AUTO-CALIBRA: VISP calcula calibración final
+        
+        RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
+    </description>
 
+    <!-- Available Parameters -->
+    <params>
+        <param type="numeric" name="total_poses" default="20" 
+               label="Total Poses" hint="Número de poses a capturar">
+            <min value="5" />
+            <max value="50" />
+        </param>
 
-	<!-- Contained Behaviors -->
+        <param type="text" name="camera_type" default="realsense" 
+               label="Camera Type" hint="realsense o usb" />
 
-	<!-- Available Parameters -->
-	<params>
+        <param type="text" name="base_frame" default="base_link" 
+               label="Base Frame" hint="Frame base del robot" />
 
-		<param type="numeric" name="pic_num" default="30" label="Número de fotos" hint="Número de imágenes a capturar (recomendado: 20-30)">
-			<min value="5" />
-			<max value="100" />
-		</param>
+        <param type="text" name="tool_frame" default="tool0" 
+               label="Tool Frame" hint="Frame del efector" />
 
-		<param type="numeric" name="square_size" default="0.0200" label="Tamaño del cuadrado (m)" hint="Tamaño del cuadrado del tablero en metros">
-			<min value="0.001" />
-			<max value="0.1" />
-		</param>
+        <param type="boolean" name="eye_in_hand" default="False" 
+               label="Eye-in-Hand" hint="True si cámara en robot" />
 
-		<param type="numeric" name="marker_size" default="0.0150" label="Tamaño del marcador (m)" hint="Tamaño del marcador ArUco en metros">
-			<min value="0.001" />
-			<max value="0.1" />
-		</param>
+        <param type="text" name="calibration_file_name" default="hand_eye_calibration.ini" 
+               label="Calibration File" hint="Nombre archivo salida" />
 
-		<param type="numeric" name="col_count" default="10" label="Columnas" hint="Número de columnas del tablero Charuco">
-			<min value="5" />
-			<max value="20" />
-		</param>
+        <!-- Configuración específica para UR5e -->
+        <param type="text" name="moveit_launch_file" default="ur_moveit.launch.py" 
+               label="MoveIt Launch" hint="Archivo launch de MoveIt para UR" />
 
-		<param type="numeric" name="row_count" default="14" label="Filas" hint="Número de filas del tablero Charuco">
-			<min value="5" />
-			<max value="20" />
-		</param>
+        <param type="text" name="robot_name" default="ur5e" 
+               label="Robot Name" hint="ur5e, ur10, etc." />
 
-		<param type="text" name="camera_type" default="realsense" label="Tipo de cámara" hint="Tipo de cámara: 'realsense' o 'usb'" />
+        <param type="text" name="moveit_config_package" default="ur_moveit_config" 
+               label="MoveIt Config Package" hint="Paquete configuración UR" />
 
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="Nombre archivo" hint="Nombre del archivo de calibración (se guardará en ~/drims_ws/calibrations/)" />
+        <param type="text" name="robot_ip" default="192.168.1.101" 
+               label="Robot IP" hint="IP del robot UR" />
 
-		<param type="text" name="output_folder" default="" label="Carpeta personalizada" hint="Carpeta para guardar imágenes (dejar vacío para usar ~/drims_ws/calibrations/camera_calib_pictures/)" />
+        <param type="boolean" name="use_fake_hardware" default="False" 
+               label="Use Fake Hardware" hint="True para simulación, False para robot real" />
 
-	</params>
+        <!-- RUTAS UNIFICADAS -->
+        <param type="text" name="output_folder" 
+               default="/home/drims/drims_ws/calibrations" 
+               label="Output Folder" 
+               hint="Carpeta raíz donde se guardarán los resultados" />
 
+        <param type="text" name="pictures_folder" 
+               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
+               label="Pictures Folder" hint="Carpeta para imágenes" readonly="true" />
+
+        <param type="text" name="robot_poses_folder" 
+               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
+               label="Robot Poses Folder" hint="Carpeta para poses" readonly="true" />
+    </params>
 
 </behavior>

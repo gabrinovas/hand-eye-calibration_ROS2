@@ -12,9 +12,7 @@ from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
-# Additional imports can be added inside the following tags
 # [MANUAL_IMPORT]
-
 # [/MANUAL_IMPORT]
 
 
@@ -29,10 +27,10 @@ class CaptureAndCalibrateSM(Behavior):
     FASE 1: Lanza MoveIt + RViz automáticamente
     FASE 2: Tú controlas el robot con la interfaz de MoveIt
             Presionas ESPACIO en cada pose para capturar
-    FASE 3: Procesamiento offline automático de todas las imágenes
+    FASE 3: Procesamiento offline con charuco_hand_eye
     FASE 4: Cálculo automático de calibración con VISP
     
-    RESULTADOS: {output_folder}/hand_eye_calibration.yaml
+    RESULTADOS: /home/drims/drims_ws/calibrations/hand_eye_calibration.yaml
     """
     
     def __init__(self, node):
@@ -53,13 +51,13 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('moveit_config_package', 'ur_moveit_config')
         self.add_parameter('robot_ip', '192.168.1.101')
-        self.add_parameter('use_fake_hardware', True)
+        self.add_parameter('use_fake_hardware', False)
         
-        # Rutas del proyecto - AHORA SE USAN
+        # RUTAS UNIFICADAS - Todo en /home/drims/drims_ws/calibrations
         base_calib_path = '/home/drims/drims_ws/calibrations'
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
-        self.add_parameter('output_folder', f'{base_calib_path}/extrinsic_calib_charuco_poses')
+        self.add_parameter('output_folder', base_calib_path)
 
         # Inicializar estados
         LaunchMoveItState.initialize_ros(node)
@@ -69,23 +67,17 @@ class CaptureAndCalibrateSM(Behavior):
         OperatableStateMachine.initialize_ros(node)
         Logger.initialize(node)
 
-        # Additional initialization code can be added inside the following tags
         # [MANUAL_INIT]
-        
         # [/MANUAL_INIT]
 
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
         # Variables para pasar datos entre estados
-        _state_machine.userdata.current_index = 0
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
-        _state_machine.userdata.output_folder = self.output_folder
 
-        # Additional creation code can be added inside the following tags
         # [MANUAL_CREATE]
-        
         # [/MANUAL_CREATE]
 
         with _state_machine:
@@ -113,37 +105,24 @@ class CaptureAndCalibrateSM(Behavior):
                     output_folder=self.output_folder,
                     auto_capture=False
                 ),
-                transitions={'done': 'Process_Pairs', 'failed': 'failed'},
+                transitions={'done': 'Process_Offline', 'failed': 'failed'},
                 autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
-            # ESTADO 3: Procesar offline
-            OperatableStateMachine.add('Process_Pairs',
+            # ESTADO 3: Procesar offline con charuco_hand_eye
+            OperatableStateMachine.add('Process_Offline',
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
-                    output_folder=self.output_folder,
                     eye_in_hand=self.eye_in_hand
                 ),
-                transitions={
-                    'done': 'Process_Pairs',
-                    'completed': 'Compute_Calibration',
-                    'failed': 'failed'
-                },
-                autonomy={
-                    'done': Autonomy.Off,
-                    'completed': Autonomy.Off,
-                    'failed': Autonomy.Off
-                },
+                transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
+                autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},
                 remapping={
-                    'current_index': 'current_index',
-                    'base_h_tool': 'base_h_tool',
-                    'camera_h_charuco': 'camera_h_charuco',
                     'base_h_tool_accumulated': 'base_h_tool_accumulated',
-                    'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated',
-                    'output_folder': 'output_folder'
+                    'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated'
                 })
 
-            # ESTADO 4: Calcular calibración
+            # ESTADO 4: Calcular calibración con VISP
             OperatableStateMachine.add('Compute_Calibration',
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,
@@ -161,7 +140,5 @@ class CaptureAndCalibrateSM(Behavior):
 
         return _state_machine
 
-    # Private functions can be added inside the following tags
     # [MANUAL_FUNC]
-    
     # [/MANUAL_FUNC]

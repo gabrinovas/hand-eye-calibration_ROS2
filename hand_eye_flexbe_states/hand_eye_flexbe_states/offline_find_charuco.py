@@ -1,234 +1,202 @@
 #!/usr/bin/env python3
 """
-Estado FlexBE para procesar offline las poses de Charuco desde archivos.
-Acumula todas las poses y las pasa al estado de calibración.
+Estado FlexBE para procesar offline las poses de Charuco.
+Inicia el nodo charuco_hand_eye y espera a que publique.
 """
 
 from flexbe_core import EventState, Logger
 import os
 import yaml
-import glob
-import numpy as np
-from geometry_msgs.msg import Transform
+import subprocess
+import time
+import rclpy
+from rclpy.node import Node
 from visp_hand2eye_calibration.msg import TransformArray
 from std_msgs.msg import Header
+import psutil
 
 class OfflineFindCharucoState(EventState):
     """
-    Procesa offline las poses de Charuco desde archivos generados.
-    
-    -- pictures_folder   string   Carpeta con imágenes
-    -- robot_poses_folder string   Carpeta con poses del robot
-    -- output_folder     string   Carpeta de salida
-    -- eye_in_hand       bool     Modo eye-in-hand o eye-to-hand
-    
-    ># current_index      int      Índice actual
-    #> base_h_tool        TransformArray  Pose actual (para debug)
-    #> camera_h_charuco    TransformArray  Pose actual (para debug)
-    #> base_h_tool_accumulated  TransformArray  TODAS las poses
-    #> camera_h_charuco_accumulated TransformArray TODAS las poses
-    
-    <= done                 Siguiente pose
-    <= completed           Todas procesadas
-    <= failed              Error
+    Inicia el nodo de detección de Charuco y espera a que publique.
     """
     
-    def __init__(self, pictures_folder, robot_poses_folder, output_folder=None, eye_in_hand=False):
+    def __init__(self, pictures_folder, robot_poses_folder, eye_in_hand=False):
         super().__init__(
-            outcomes=['done', 'completed', 'failed'],
-            input_keys=['current_index'],
-            output_keys=['base_h_tool', 'camera_h_charuco', 
-                        'base_h_tool_accumulated', 'camera_h_charuco_accumulated']
+            outcomes=['completed', 'failed'],
+            output_keys=['base_h_tool_accumulated', 'camera_h_charuco_accumulated']
         )
         
         self.pictures_folder = pictures_folder
         self.robot_poses_folder = robot_poses_folder
-        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses'
         self.eye_in_hand = eye_in_hand
         
-        self.pairs = []
-        self.base_all = TransformArray()
-        self.camera_all = TransformArray()
-        self.loaded = False
+        self.charuco_process = None
+        self.base_h_tool_accumulated = None
+        self.camera_h_charuco_accumulated = None
+        self.received_data = False
+        self.max_wait_time = 60  # segundos máximo de espera
+        self.start_time = None
+        
+        # Suscripciones
+        self.world_effector_sub = None
+        self.camera_object_sub = None
         
         Logger.loginfo("="*60)
         Logger.loginfo("🔍 ESTADO: OfflineFindCharuco")
         Logger.loginfo("="*60)
         Logger.loginfo(f"📁 Imágenes: {self.pictures_folder}")
         Logger.loginfo(f"📁 Poses robot: {self.robot_poses_folder}")
-        Logger.loginfo(f"📁 Output: {self.output_folder}")
         Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand else 'Eye-to-hand'}")
         
     def on_enter(self, userdata):
-        """Al entrar, cargar pares y procesar"""
-        if not self.loaded:
-            if not self._load_pairs():
-                return 'failed'
-            self.loaded = True
-            
-            # Inicializar acumuladores
-            self.base_all.header = Header()
-            self.base_all.header.stamp = self._node.get_clock().now().to_msg()
-            self.base_all.header.frame_id = 'base_link'
-            
-            self.camera_all.header = Header()
-            self.camera_all.header.stamp = self._node.get_clock().now().to_msg()
-            self.camera_all.header.frame_id = 'camera_color_optical_frame'
-            
-            Logger.loginfo(f"📚 Cargados {len(self.pairs)} pares de calibración")
+        """Iniciar nodo de detección y suscribirse"""
+        self.received_data = False
+        self.start_time = time.time()
         
-        # Verificar índice
-        if 'current_index' not in userdata or userdata.current_index is None:
-            userdata.current_index = 0
+        # Limpiar datos anteriores
+        self.base_h_tool_accumulated = TransformArray()
+        self.camera_h_charuco_accumulated = TransformArray()
         
-        if userdata.current_index >= len(self.pairs):
-            # Terminamos: pasar acumuladores
-            userdata.base_h_tool_accumulated = self.base_all
-            userdata.camera_h_charuco_accumulated = self.camera_all
-            Logger.loginfo(f"✅ Procesamiento completado: {len(self.base_all.transforms)} poses")
+        self.base_h_tool_accumulated.header = Header()
+        self.base_h_tool_accumulated.header.stamp = self._node.get_clock().now().to_msg()
+        self.base_h_tool_accumulated.header.frame_id = 'base_link'
+        
+        self.camera_h_charuco_accumulated.header = Header()
+        self.camera_h_charuco_accumulated.header.stamp = self._node.get_clock().now().to_msg()
+        self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
+        
+        # Verificar si ya hay detecciones guardadas
+        detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+        if os.path.exists(detections_file):
+            Logger.loginfo("📂 Cargando detecciones desde archivo existente...")
+            if self._load_from_file():
+                Logger.loginfo("✅ Detecciones cargadas desde archivo")
+                self.received_data = True
+                return
+        
+        # Si no hay archivo, lanzar nodo
+        self._launch_charuco_node()
+        
+        # Crear suscripciones
+        self.world_effector_sub = self._node.create_subscription(
+            TransformArray,
+            '/world_effector_poses',
+            self.world_effector_callback,
+            10
+        )
+        
+        self.camera_object_sub = self._node.create_subscription(
+            TransformArray,
+            '/camera_object_poses',
+            self.camera_object_callback,
+            10
+        )
+        
+        Logger.loginfo("⏳ Esperando detecciones del nodo charuco_hand_eye...")
+    
+    def _launch_charuco_node(self):
+        """Lanza el nodo charuco_hand_eye"""
+        try:
+            # Verificar si ya está corriendo
+            if self._is_charuco_running():
+                Logger.loginfo("✅ Nodo charuco_hand_eye ya está corriendo")
+                return
+            
+            Logger.loginfo("🚀 Lanzando nodo charuco_hand_eye...")
+            
+            cmd = [
+                'ros2', 'run', 'charuco_calibrator', 'charuco_hand_eye_offline',
+                '--ros-args',
+                '-p', f'pictures_folder:={self.pictures_folder}',
+                '-p', f'robot_poses_folder:={self.robot_poses_folder}',
+                '-p', f'eye_in_hand:={str(self.eye_in_hand).lower()}',
+                '-p', 'publish_rate:=0.5'  # Publica cada 2 segundos
+            ]
+            
+            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
+            
+            self.charuco_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            
+            # Esperar a que inicie
+            time.sleep(3)
+            
+        except Exception as e:
+            Logger.logerr(f"❌ Error lanzando charuco_hand_eye: {e}")
+    
+    def _is_charuco_running(self):
+        """Verifica si el nodo está corriendo"""
+        try:
+            result = subprocess.run(
+                ['ros2', 'node', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            return 'hand_eye_calibrator' in result.stdout
+        except:
+            return False
+    
+    def _load_from_file(self):
+        """Carga detecciones desde archivo YAML"""
+        try:
+            detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+            poses_file = '/home/drims/drims_ws/calibrations/robot_poses.yaml'
+            
+            with open(detections_file, 'r') as f:
+                detections = yaml.safe_load(f)
+            
+            # Aquí construirías los mensajes TransformArray desde el archivo
+            # Por simplicidad, mejor esperar a que publique el nodo
+            return False
+            
+        except Exception as e:
+            Logger.logwarn(f"⚠️ Error cargando archivo: {e}")
+            return False
+    
+    def world_effector_callback(self, msg):
+        """Callback para poses del robot"""
+        self.base_h_tool_accumulated = msg
+        self._check_complete()
+    
+    def camera_object_callback(self, msg):
+        """Callback para poses del charuco"""
+        self.camera_h_charuco_accumulated = msg
+        self._check_complete()
+    
+    def _check_complete(self):
+        """Verifica si ya tenemos todos los datos"""
+        if (len(self.base_h_tool_accumulated.transforms) > 0 and 
+            len(self.camera_h_charuco_accumulated.transforms) > 0 and
+            len(self.base_h_tool_accumulated.transforms) == len(self.camera_h_charuco_accumulated.transforms)):
+            self.received_data = True
+            Logger.loginfo(f"✅ Recibidos {len(self.base_h_tool_accumulated.transforms)} pares de calibración")
+    
+    def execute(self, userdata):
+        """Ejecución: esperar datos o timeout"""
+        if self.received_data:
+            userdata.base_h_tool_accumulated = self.base_h_tool_accumulated
+            userdata.camera_h_charuco_accumulated = self.camera_h_charuco_accumulated
             return 'completed'
         
-        # Cargar par actual
-        if not self._load_pair(userdata.current_index, userdata):
+        # Verificar timeout
+        if time.time() - self.start_time > self.max_wait_time:
+            Logger.logerr(f"❌ Timeout esperando detecciones ({self.max_wait_time}s)")
             return 'failed'
         
-        userdata.current_index += 1
-        return 'done'
+        return None  # Seguir esperando
     
-    def _load_pairs(self):
-        """Carga los pares generados"""
-        try:
-            # Buscar en pairs/
-            pairs_folder = os.path.join(self.output_folder, 'pairs')
-            if os.path.exists(pairs_folder):
-                pair_files = sorted(glob.glob(os.path.join(pairs_folder, 'pair_*.yaml')))
-                for pf in pair_files:
-                    with open(pf, 'r') as f:
-                        self.pairs.append(yaml.safe_load(f))
-                Logger.loginfo(f"📖 Cargados {len(pair_files)} pares desde {pairs_folder}")
-            
-            # Si no hay pares, intentar cargar desde robot_poses_folder
-            if not self.pairs:
-                Logger.logwarn("⚠️ No se encontraron pares, buscando poses individuales...")
-                
-                # Buscar archivos de detección
-                detections_folder = os.path.join(self.output_folder, 'detections')
-                if os.path.exists(detections_folder):
-                    detection_files = sorted(glob.glob(os.path.join(detections_folder, 'detection_*.yaml')))
-                else:
-                    detection_files = []
-                
-                # Buscar poses del robot
-                pose_files = sorted(glob.glob(os.path.join(self.robot_poses_folder, 'pose_*.yaml')))
-                
-                # Emparejar por índice
-                num_pairs = min(len(pose_files), len(detection_files))
-                if num_pairs == 0:
-                    Logger.logerr("❌ No se encontraron ni poses ni detecciones")
-                    return False
-                
-                for i in range(num_pairs):
-                    with open(pose_files[i], 'r') as f:
-                        pose_data = yaml.safe_load(f)
-                    with open(detection_files[i], 'r') as f:
-                        det_data = yaml.safe_load(f)
-                    
-                    pair = {
-                        'index': i+1,
-                        'robot_pose': pose_data,
-                        'charuco_pose': det_data.get('charuco_pose', det_data)
-                    }
-                    self.pairs.append(pair)
-                
-                Logger.loginfo(f"📖 Cargados {num_pairs} pares desde archivos individuales")
-            
-            return len(self.pairs) > 0
-            
-        except Exception as e:
-            Logger.logerr(f"❌ Error cargando pares: {e}")
-            return False
-    
-    def _load_pair(self, index, userdata):
-        """Carga un par específico y lo acumula"""
-        try:
-            pair = self.pairs[index]
-            
-            # ===== POSE DEL ROBOT (base → tool) =====
-            trans_robot = Transform()
-            
-            if 'robot_pose' in pair:
-                robot_pose = pair['robot_pose']
-                # Formato del robot_pose
-                if 'position' in robot_pose:
-                    trans_robot.translation.x = robot_pose['position'][0]
-                    trans_robot.translation.y = robot_pose['position'][1]
-                    trans_robot.translation.z = robot_pose['position'][2]
-                else:
-                    trans_robot.translation.x = robot_pose.get('x', 0)
-                    trans_robot.translation.y = robot_pose.get('y', 0)
-                    trans_robot.translation.z = robot_pose.get('z', 0)
-                
-                if 'orientation' in robot_pose:
-                    trans_robot.rotation.x = robot_pose['orientation'][0]
-                    trans_robot.rotation.y = robot_pose['orientation'][1]
-                    trans_robot.rotation.z = robot_pose['orientation'][2]
-                    trans_robot.rotation.w = robot_pose['orientation'][3]
-                else:
-                    trans_robot.rotation.x = robot_pose.get('qx', 0)
-                    trans_robot.rotation.y = robot_pose.get('qy', 0)
-                    trans_robot.rotation.z = robot_pose.get('qz', 0)
-                    trans_robot.rotation.w = robot_pose.get('qw', 1)
-            
-            # ===== POSE DEL CHARUCO (cámara → charuco) =====
-            trans_charuco = Transform()
-            
-            if 'charuco_pose' in pair:
-                charuco_pose = pair['charuco_pose']
-                if 'translation' in charuco_pose:
-                    trans_charuco.translation.x = charuco_pose['translation'][0]
-                    trans_charuco.translation.y = charuco_pose['translation'][1]
-                    trans_charuco.translation.z = charuco_pose['translation'][2]
-                else:
-                    trans_charuco.translation.x = charuco_pose.get('x', 0)
-                    trans_charuco.translation.y = charuco_pose.get('y', 0)
-                    trans_charuco.translation.z = charuco_pose.get('z', 0)
-                
-                if 'quaternion' in charuco_pose:
-                    trans_charuco.rotation.x = charuco_pose['quaternion'][0]
-                    trans_charuco.rotation.y = charuco_pose['quaternion'][1]
-                    trans_charuco.rotation.z = charuco_pose['quaternion'][2]
-                    trans_charuco.rotation.w = charuco_pose['quaternion'][3]
-                elif 'orientation' in charuco_pose:
-                    trans_charuco.rotation.x = charuco_pose['orientation'][0]
-                    trans_charuco.rotation.y = charuco_pose['orientation'][1]
-                    trans_charuco.rotation.z = charuco_pose['orientation'][2]
-                    trans_charuco.rotation.w = charuco_pose['orientation'][3]
-                else:
-                    trans_charuco.rotation.x = charuco_pose.get('qx', 0)
-                    trans_charuco.rotation.y = charuco_pose.get('qy', 0)
-                    trans_charuco.rotation.z = charuco_pose.get('qz', 0)
-                    trans_charuco.rotation.w = charuco_pose.get('qw', 1)
-            
-            # ACUMULAR
-            self.base_all.transforms.append(trans_robot)
-            self.camera_all.transforms.append(trans_charuco)
-            
-            # Pasar pose actual para debug
-            base_current = TransformArray()
-            base_current.header = self.base_all.header
-            base_current.transforms = [trans_robot]
-            
-            camera_current = TransformArray()
-            camera_current.header = self.camera_all.header
-            camera_current.transforms = [trans_charuco]
-            
-            userdata.base_h_tool = base_current
-            userdata.camera_h_charuco = camera_current
-            
-            Logger.loginfo(f"✅ Par {index+1}/{len(self.pairs)} cargado")
-            
-            return True
-            
-        except Exception as e:
-            Logger.logerr(f"❌ Error cargando par {index}: {e}")
-            return False
+    def on_stop(self):
+        """Limpiar al terminar"""
+        # Cancelar suscripciones
+        if self.world_effector_sub:
+            self._node.destroy_subscription(self.world_effector_sub)
+        if self.camera_object_sub:
+            self._node.destroy_subscription(self.camera_object_sub)
+        
+        # No matamos el nodo charuco, podría estar siendo usado
+        self.charuco_process = None
