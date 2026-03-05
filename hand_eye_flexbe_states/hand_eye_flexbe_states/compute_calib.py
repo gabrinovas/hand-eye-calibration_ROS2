@@ -49,10 +49,9 @@ class ComputeCalibState(EventState):
         self.visp_process = None
         self.calib_client = None
         self._service_ready = False
-        self._node = None
         
-        # Configurar carpetas de salida - ACTUALIZADO
-        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations/extrinsic_calib_charuco_poses'
+        # Configurar carpetas de salida
+        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations'
         self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
         os.makedirs(self.calib_results_folder, exist_ok=True)
         
@@ -83,12 +82,8 @@ class ComputeCalibState(EventState):
     
     def on_start(self):
         """Inicializar: lanzar VISP si es necesario"""
-        # Crear nodo si no existe
-        if not self._node:
-            self._node = rclpy.create_node('compute_calib_state')
-        
-        # IMPORTANTE: Primero asegurar que el proxy tiene el nodo
-        ProxyServiceCaller.initialize(self._node)
+        # Inicializar el proxy con el nodo de FlexBE
+        ProxyServiceCaller.initialize(ComputeCalibState._node)
         
         if self.launch_visp:
             self._ensure_visp_running()
@@ -114,15 +109,17 @@ class ComputeCalibState(EventState):
         Logger.loginfo("🚀 Lanzando nodo VISP...")
         
         try:
+            # Convertir booleano a string 'true'/'false' para ROS2
+            eye_in_hand_str = 'true' if self.eye_in_hand_mode else 'false'
+            
             cmd = [
                 'ros2', 'run', 
                 'visp_hand2eye_calibration', 
                 'visp_hand2eye_calibration_calibrator',
                 '--ros-args',
-                '-p', f'eye_in_hand:={str(self.eye_in_hand_mode).lower()}',
+                '-p', f'eye_in_hand:={eye_in_hand_str}',
                 '-p', 'camera_frame:=camera_color_optical_frame',
-                '-p', 'marker_frame:=charuco_frame',
-                '-r', '__ns:=/visp_calibration'
+                '-p', 'marker_frame:=charuco_frame'
             ]
             
             Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
@@ -138,7 +135,7 @@ class ComputeCalibState(EventState):
             # Esperar a que inicie
             Logger.loginfo("⏳ Esperando a que VISP inicie...")
             
-            for i in range(15):  # Aumentado a 15 segundos
+            for i in range(15):
                 time.sleep(1)
                 if self._is_visp_running():
                     Logger.loginfo(f"✅ VISP iniciado correctamente después de {i+1}s")
@@ -153,7 +150,7 @@ class ComputeCalibState(EventState):
                     return False
             
             Logger.logwarn("⚠️ VISP no responde pero podría estar iniciando...")
-            return True  # Asumir que iniciará
+            return True
             
         except Exception as e:
             Logger.logerr(f"❌ Error lanzando VISP: {e}")
@@ -198,9 +195,6 @@ class ComputeCalibState(EventState):
                 Logger.loginfo("✅ Servicio VISP ahora disponible")
             else:
                 Logger.logwarn("⏳ Esperando a que el servicio VISP esté disponible...")
-                # Spin para procesar callbacks
-                if self._node:
-                    rclpy.spin_once(self._node, timeout_sec=0.1)
                 return None  # No fallar, solo esperar
         
         # Verificar datos
@@ -321,7 +315,11 @@ class ComputeCalibState(EventState):
         """Guarda la calibración en formato INI, YAML y archivo principal"""
         
         # ===== Guardar INI =====
-        ini_path = os.path.join(self.calib_results_folder, self.calibration_file_name)
+        ini_filename = self.calibration_file_name
+        if not ini_filename.endswith('.ini'):
+            ini_filename += '.ini'
+        
+        ini_path = os.path.join(self.calib_results_folder, ini_filename)
         
         if os.path.exists(ini_path):
             self.config.read(ini_path)
@@ -425,8 +423,3 @@ class ComputeCalibState(EventState):
                         pass
             self.visp_process = None
             Logger.loginfo("✅ VISP detenido")
-        
-        # Destruir nodo
-        if self._node:
-            self._node.destroy_node()
-            self._node = None

@@ -9,12 +9,12 @@ import os
 import yaml
 import subprocess
 import time
-import rclpy
-from rclpy.node import Node
 from visp_hand2eye_calibration.msg import TransformArray
 from std_msgs.msg import Header
 import psutil
 import signal
+import numpy as np
+import tf_transformations
 
 class OfflineFindCharucoState(EventState):
     """
@@ -36,13 +36,12 @@ class OfflineFindCharucoState(EventState):
         self.base_h_tool_accumulated = None
         self.camera_h_charuco_accumulated = None
         self.received_data = False
-        self.max_wait_time = 120  # segundos máximo de espera (aumentado para procesamiento)
+        self.max_wait_time = 120  # segundos máximo de espera
         self.start_time = None
         
         # Suscripciones
         self.world_effector_sub = None
         self.camera_object_sub = None
-        self.node = None
         
         Logger.loginfo("="*60)
         Logger.loginfo("🔍 ESTADO: OfflineFindCharuco")
@@ -57,24 +56,20 @@ class OfflineFindCharucoState(EventState):
         self.received_data = False
         self.start_time = time.time()
         
-        # Crear nodo si no existe
-        if not self.node:
-            self.node = rclpy.create_node('offline_find_charuco_state')
+        # Crear carpeta de salida si no existe
+        os.makedirs(self.output_folder, exist_ok=True)
         
         # Limpiar datos anteriores
         self.base_h_tool_accumulated = TransformArray()
         self.camera_h_charuco_accumulated = TransformArray()
         
         self.base_h_tool_accumulated.header = Header()
-        self.base_h_tool_accumulated.header.stamp = self.node.get_clock().now().to_msg()
+        self.base_h_tool_accumulated.header.stamp = self._node.get_clock().now().to_msg()
         self.base_h_tool_accumulated.header.frame_id = 'base_link'
         
         self.camera_h_charuco_accumulated.header = Header()
-        self.camera_h_charuco_accumulated.header.stamp = self.node.get_clock().now().to_msg()
+        self.camera_h_charuco_accumulated.header.stamp = self._node.get_clock().now().to_msg()
         self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
-        
-        # Crear carpeta de salida si no existe
-        os.makedirs(self.output_folder, exist_ok=True)
         
         # Verificar si ya hay detecciones guardadas
         detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
@@ -88,15 +83,15 @@ class OfflineFindCharucoState(EventState):
         # Si no hay archivo, lanzar nodo
         self._launch_charuco_node()
         
-        # Crear suscripciones
-        self.world_effector_sub = self.node.create_subscription(
+        # Crear suscripciones usando el nodo de FlexBE
+        self.world_effector_sub = self._node.create_subscription(
             TransformArray,
             '/world_effector_poses',
             self.world_effector_callback,
             10
         )
         
-        self.camera_object_sub = self.node.create_subscription(
+        self.camera_object_sub = self._node.create_subscription(
             TransformArray,
             '/camera_object_poses',
             self.camera_object_callback,
@@ -115,22 +110,20 @@ class OfflineFindCharucoState(EventState):
             
             Logger.loginfo("🚀 Lanzando nodo charuco_hand_eye...")
             
-            # Usar el comando correcto para tu setup
-            # Opción 1: Si está instalado como paquete
+            # Convertir booleano a string 'true'/'false' para ROS2
+            eye_in_hand_str = 'true' if self.eye_in_hand else 'false'
+            
             cmd = [
                 'ros2', 'run', 'charuco_calibrator', 'charuco_hand_eye',
                 '--ros-args',
                 '-p', f'pictures_folder:={self.pictures_folder}',
                 '-p', f'robot_poses_folder:={self.robot_poses_folder}',
                 '-p', f'output_folder:={self.output_folder}',
-                '-p', f'eye_in_hand:={str(self.eye_in_hand).lower()}',
+                '-p', f'eye_in_hand:={eye_in_hand_str}',
+                '-p', 'camera_intrinsics_file:=/home/drims/drims_ws/calibrations/camera_intrinsics.yaml',
                 '-p', 'publish_rate:=0.5',
                 '-p', 'save_results:=True'
             ]
-            
-            # Opción 2: Si es un script directo
-            # script_path = '/home/drims/drims_ws/src/charuco_calibrator/charuco_hand_eye.py'
-            # cmd = ['python3', script_path]
             
             Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
             
@@ -166,7 +159,6 @@ class OfflineFindCharucoState(EventState):
                 text=True,
                 timeout=2
             )
-            # Buscar nombres comunes del nodo
             node_list = result.stdout
             return any(name in node_list for name in ['hand_eye_calibrator', 'charuco_hand_eye'])
         except:
@@ -176,7 +168,6 @@ class OfflineFindCharucoState(EventState):
         """Carga detecciones desde archivo YAML"""
         try:
             detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
-            poses_file = '/home/drims/drims_ws/calibrations/robot_poses.yaml'
             
             if not os.path.exists(detections_file):
                 return False
@@ -192,14 +183,12 @@ class OfflineFindCharucoState(EventState):
             camera_object_msg = TransformArray()
             
             world_effector_msg.header = Header()
-            world_effector_msg.header.stamp = self.node.get_clock().now().to_msg()
+            world_effector_msg.header.stamp = self._node.get_clock().now().to_msg()
             world_effector_msg.header.frame_id = 'base_link'
             
             camera_object_msg.header = Header()
-            camera_object_msg.header.stamp = self.node.get_clock().now().to_msg()
+            camera_object_msg.header.stamp = self._node.get_clock().now().to_msg()
             camera_object_msg.header.frame_id = 'camera_color_optical_frame'
-            
-            import tf_transformations
             
             for pair in data['pairs']:
                 # Robot pose
@@ -279,19 +268,15 @@ class OfflineFindCharucoState(EventState):
             Logger.logerr(f"❌ Timeout esperando detecciones ({self.max_wait_time}s)")
             return 'failed'
         
-        # Spin del nodo para procesar callbacks
-        if self.node:
-            rclpy.spin_once(self.node, timeout_sec=0.1)
-        
         return None  # Seguir esperando
     
     def on_stop(self):
         """Limpiar al terminar"""
         # Cancelar suscripciones
         if self.world_effector_sub:
-            self.node.destroy_subscription(self.world_effector_sub)
+            self._node.destroy_subscription(self.world_effector_sub)
         if self.camera_object_sub:
-            self.node.destroy_subscription(self.camera_object_sub)
+            self._node.destroy_subscription(self.camera_object_sub)
         
         # Detener proceso Charuco si lo iniciamos
         if self.charuco_process:
@@ -312,8 +297,3 @@ class OfflineFindCharucoState(EventState):
                         pass
             self.charuco_process = None
             Logger.loginfo("✅ Nodo Charuco detenido")
-        
-        # Destruir nodo
-        if self.node:
-            self.node.destroy_node()
-            self.node = None
