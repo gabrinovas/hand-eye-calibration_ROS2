@@ -67,6 +67,9 @@ class ComputeCalibState(EventState):
         # Archivo principal de salida
         self.main_output_file = '/home/drims/drims_ws/calibrations/camera_extrinsics.yaml'
         
+        # Archivo de detecciones duplicado a eliminar
+        self.temp_detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+        
         # Config parser para INI
         self.config = configparser.ConfigParser()
         self.config.optionxform = str
@@ -78,6 +81,7 @@ class ComputeCalibState(EventState):
         Logger.loginfo(f"📁 Archivo: {self.calibration_file_name}")
         Logger.loginfo(f"📂 Carpeta: {self.calib_results_folder}")
         Logger.loginfo(f"📄 Archivo principal: {self.main_output_file}")
+        Logger.loginfo(f"📄 Archivo temp a eliminar: {self.temp_detections_file}")
         Logger.loginfo(f"🚀 Auto-VISP: {launch_visp}")
     
     def on_start(self):
@@ -279,6 +283,9 @@ class ComputeCalibState(EventState):
             # Guardar resultado
             self._save_calibration(res.effector_camera, num_poses)
             
+            # Eliminar archivo temporal de detecciones
+            self._cleanup_temp_files()
+            
             return 'finish'
             
         except Exception as e:
@@ -310,6 +317,17 @@ class ComputeCalibState(EventState):
         inv.rotation.w = float(quat_inv[3])
         
         return inv
+    
+    def _cleanup_temp_files(self):
+        """Elimina archivos temporales después de la calibración"""
+        try:
+            if os.path.exists(self.temp_detections_file):
+                os.remove(self.temp_detections_file)
+                Logger.loginfo(f"🧹 Archivo temporal eliminado: {self.temp_detections_file}")
+            else:
+                Logger.loginfo(f"📂 Archivo temporal no encontrado (ya eliminado): {self.temp_detections_file}")
+        except Exception as e:
+            Logger.logwarn(f"⚠️ No se pudo eliminar el archivo temporal {self.temp_detections_file}: {e}")
     
     def _save_calibration(self, transform, num_poses):
         """Guarda la calibración en formato INI, YAML y archivo principal"""
