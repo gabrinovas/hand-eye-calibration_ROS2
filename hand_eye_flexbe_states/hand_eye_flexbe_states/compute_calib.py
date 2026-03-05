@@ -436,14 +436,19 @@ class ComputeCalibState(EventState):
         T_w2c_flat = [float(x) for x in T_w2c_flat]
         T_c2w_flat = [float(x) for x in T_c2w_flat]
         
+        # Crear estructura con clave 'camera' e índice 1
         extrinsic_data = {
-            'T_w2c': T_w2c_flat,
-            'T_c2w': T_c2w_flat
+            'camera': {
+                1: {
+                    'T_c2w': T_c2w_flat,
+                    'T_w2c': T_w2c_flat
+                }
+            }
         }
         
         with open(extrinsic_file, 'w') as f:
-            # Usar default_flow_style=True para formato compacto en una línea
-            yaml.dump(extrinsic_data, f, default_flow_style=True, width=float("inf"))
+            # Usar default_flow_style=None para formato legible pero compacto
+            yaml.dump(extrinsic_data, f, default_flow_style=None, sort_keys=False, indent=2)
         
         Logger.loginfo(f"💾 Matriz extrínseca guardada en: {extrinsic_file}")
     
