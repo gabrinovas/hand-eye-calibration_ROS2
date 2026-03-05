@@ -24,12 +24,10 @@ setup(
         'console_scripts': [
             'charuco_camera_calibration = hand_eye_flexbe_states.charuco_camera_calibration',
             'compute_calib = hand_eye_flexbe_states.compute_calib',
-            'find_charuco = hand_eye_flexbe_states.find_charuco',
-            'move_robot_manually = hand_eye_flexbe_states.move_robot_manually',
+            'launch_moveit = hand_eye_flexbe_states.launch_moveit',
+            'offline_find_charuco = hand_eye_flexbe_states.offline_find_charuco',
             'take_picture = hand_eye_flexbe_states.take_picture',
             'take_pose_and_picture = hand_eye_flexbe_states.take_pose_and_picture',
-            'offline_find_charuco = hand_eye_flexbe_states.offline_find_charuco',
-            'launch_moveit = hand_eye_flexbe_states.launch_moveit',
         ],
     },
 )
