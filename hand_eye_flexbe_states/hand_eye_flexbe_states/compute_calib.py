@@ -446,8 +446,8 @@ class ComputeCalibState(EventState):
         extrinsic_data = {
             'camera': {
                 1: {
-                    'T_c2w': T_c2w_flat,
-                    'T_w2c': T_w2c_flat
+                    'T_w2c': T_w2c_flat,
+                    'T_c2w': T_c2w_flat
                 }
             }
         }
