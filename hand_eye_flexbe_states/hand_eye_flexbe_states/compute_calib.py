@@ -247,16 +247,17 @@ class ComputeCalibState(EventState):
             req.world_effector.transforms = userdata.base_h_tool.transforms
             req.camera_object.transforms = userdata.camera_h_charuco.transforms
         else:
-            # Modo eye-to-hand: invertir transforms
-            Logger.loginfo("🔄 Modo Eye-to-hand: invirtiendo transforms")
+            # Modo eye-to-hand: invertir solo transform de robot
+            Logger.loginfo("🔄 Modo Eye-to-hand: invirtiendo solo transform del robot (base_h_tool)")
             
             for t in userdata.base_h_tool.transforms:
                 inv = self._invert_transform(t)
                 req.world_effector.transforms.append(inv)
             
+            # La transformada de la camara al charuco NO se invierte en eye-to-hand
+            # La ecuacion es: (bMe)^-1 * bMc * cMo = eMo (Constante)
             for t in userdata.camera_h_charuco.transforms:
-                inv = self._invert_transform(t)
-                req.camera_object.transforms.append(inv)
+                req.camera_object.transforms.append(t)
         
         try:
             # Llamar al servicio
@@ -431,11 +432,14 @@ class ComputeCalibState(EventState):
         # ===== Guardar extrinsic_matrix.yaml con formato específico =====
         extrinsic_file = os.path.join(self.output_folder, 'extrinsic_matrix.yaml')
         
-        # Calcular T_c2w (inversa de T)
-        T_c2w = np.linalg.inv(T)
+        # T es la matriz de transformación devuelta por ViSP (eMc o bMc).
+        # Transforma puntos desde el frame de la cámara al frame del parent (effector o base).
+        # Por lo tanto, T es matemáticamente T_c2w. La inversa es T_w2c.
+        T_c2w = T
+        T_w2c = np.linalg.inv(T)
         
         # Convertir matrices a listas planas de 16 elementos
-        T_w2c_flat = T.flatten().tolist()
+        T_w2c_flat = T_w2c.flatten().tolist()
         T_c2w_flat = T_c2w.flatten().tolist()
         
         # Convertir todos los valores a float nativo con alta precisión
