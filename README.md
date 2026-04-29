@@ -1,5 +1,30 @@
 # Universal Automatical Hand-Eye-Calibration
-This Hand-eye_calibration method include [FlexBE](http://philserver.bplaced.net/fbe/download.php), and [MoveIt!2](https://moveit.ros.org/), which make this whole framework easier for beginner to do hand-eye-calibration, also implement on different platform more faster.
+
+This hand-eye calibration framework integrates [FlexBE](http://philserver.bplaced.net/fbe/download.php) and [MoveIt!2](https://moveit.ros.org/) to make the calibration process intuitive for beginners, while allowing fast deployment on different robotic platforms.
+
+## Features
+- **Dual Calibration Modes:** Mathematically robust and fully validated support for both **Eye-in-hand** (camera mounted on the robot's end-effector) and **Eye-to-hand** (fixed camera in the environment, target mounted on the robot) setups.
+- **FlexBE GUI Integration:** Manage the capture, detection, and calculation processes effortlessly through visual state machines.
+- **High-Precision Charuco Detection:** Powered by OpenCV, using Charuco boards to maximize camera pose estimation accuracy.
+- **Standardized ROS2 Architecture:** Connects smoothly with MoveIt!2 and the ViSP hand-eye calibration solver (`vision_visp`).
+
+## How It Works (Architecture Overview)
+
+The calibration pipeline automates the complex geometric relationship mapping between the robot and the camera through a streamlined process:
+
+### 1. Data Collection & Robot Kinematics (`hand_eye_flexbe_behaviors`)
+Using MoveIt!2, FlexBE commands the robot arm to move through a predefined set of waypoint poses. For each waypoint, the system records the exact spatial transformation from the robot's **Base** to its **End-Effector** ($^{b}M_{e}$). This ensures a robust variation in viewpoints, which is mathematically essential for the solver to converge optimally.
+
+### 2. High-Fidelity Target Detection (`charuco_calibrator`)
+At every waypoint, the camera captures an image. These images are processed by our OpenCV-based Charuco detector. Unlike standard ArUco markers, Charuco boards use internal chessboard corners to achieve sub-pixel accuracy. The detector extracts the transformation matrix from the **Camera** to the **Target Board** ($^{c}M_{o}$).
+
+### 3. Kinematic Solver (`vision_visp`)
+Once all poses and detections are gathered, the data is fed into the ViSP (Visual Servoing Platform) `visp_hand2eye_calibration` solver. The solver parses the classical Hand-Eye mathematical formulation $AX = XB$:
+- **Eye-in-Hand Mode:** The camera moves with the arm, solving for the static transformation between the End-Effector and the Camera ($^{e}M_{c}$).
+- **Eye-to-Hand Mode:** The camera is fixed and observes the board mounted on the moving arm. The system automatically handles the strict mathematical inversion of the robot's kinematics to solve for the transformation between the Base and the Camera ($^{b}M_{c}$).
+
+### 4. Output Generation
+Finally, the computed $4 \times 4$ spatial matrices ($T_{c2w}$ and $T_{w2c}$) and quaternions are serialized and exported to standard `.yaml` and `.ini` files. These drop-in configuration files can be injected directly into subsequent robotic grasping, perception, or visual-servoing pipelines without any further mathematical conversion.
 
 ## Acknowledgment
 This charuco marker detection is forked from the [charuco_detector](https://github.com/carlosmccosta/charuco_detector).
@@ -120,7 +145,7 @@ After this, you can press `Runtime Control` on the top, execution window will sh
 
 <center><img src="doc/resource/maunal_hand_eye_cali.png" alt="maunal_hand_eye_calib_execute" style="width: 80%;"/></center>
 
-Before press `Start Execution`, parameter `eye_in_hand` decide which calibration mode you want to use, 
+Before press `Start Execution`, parameter `eye_in_hand` decide which calibration mode you want to use (`True` for eye-in-hand, `False` for eye-to-hand), 
 `calib_pose_num` means how many sample points you want,
 `base_link` , `tip_link` means the base coordinate and end-effector coordinate's name, 
 `calibration_file_name` means the name of save file. `move_distance` means the distance of each sample points,
