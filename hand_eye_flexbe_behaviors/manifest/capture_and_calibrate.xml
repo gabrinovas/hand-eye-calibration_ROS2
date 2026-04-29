@@ -7,94 +7,94 @@
     <author>Gabriel Novas</author>
     <date>2026-03-05</date>
     <description>
-        Comportamiento COMPLETO para calibración ojo-mano:
+        FULL Hand-Eye Calibration Behavior:
         
-        FASE 1: AUTO-LANZA: MoveIt + RViz se abren solos
-        FASE 2: TÚ CONTROLAS: Mueves robot con interfaz de MoveIt
-                CAPTURAS: Presionas ESPACIO en cada pose
-                - Imágenes: /calibrations/extrinsic_calibration/pictures/
+        PHASE 1: AUTO-LAUNCH: MoveIt + RViz open automatically
+        PHASE 2: YOU CONTROL: Move robot with MoveIt interface
+                CAPTURE: Press SPACE at each pose
+                - Images: /calibrations/extrinsic_calibration/pictures/
                 - Poses: /calibrations/extrinsic_calibration/robot_poses/
         
-        FASE 3: AUTO-DETECTA: charuco_hand_eye detecta Charuco
-                - Usa calibración intrínseca: /calibrations/camera_intrinsics.yaml
-                - Guarda detecciones: /calibrations/extrinsic_calibration/charuco_table_poses/
+        PHASE 3: AUTO-DETECT: charuco_hand_eye detects Charuco
+                - Uses intrinsic calibration: /calibrations/camera_intrinsics.yaml
+                - Saves detections: /calibrations/extrinsic_calibration/charuco_table_poses/
         
-        FASE 4: AUTO-CALIBRA: VISP calcula calibración final
-                - Resultado principal: /calibrations/camera_extrinsics.yaml
-                - Matrices extrínsecas: /calibrations/extrinsic_matrix.yaml
-                - Formato compacto con T_w2c y T_c2w para integración
+        PHASE 4: AUTO-CALIBRATE: VISP calculates final calibration
+                - Main result: /calibrations/camera_extrinsics.yaml
+                - Extrinsic matrices: /calibrations/extrinsic_matrix.yaml
+                - Compact format with T_w2c and T_c2w for integration
         
-        RESULTADOS FINALES:
-        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (calibración detallada)
-        - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (formato compacto)
-        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones)
-        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.ini (formato INI)
-        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.yaml (copia detallada)
+        FINAL RESULTS:
+        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (detailed calibration)
+        - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (compact format)
+        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
+        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.ini (INI format)
+        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.yaml (detailed copy)
     </description>
 
     <!-- Available Parameters -->
     <params>
-        <!-- Parámetros de captura -->
+        <!-- Capture parameters -->
         <param type="numeric" name="total_poses" default="20" 
-               label="Total Poses" hint="Número de poses a capturar (mínimo 5, máximo 50)">
+               label="Total Poses" hint="Number of poses to capture (minimum 5, maximum 50)">
             <min value="5" />
             <max value="50" />
         </param>
 
         <param type="text" name="camera_type" default="realsense" 
-               label="Camera Type" hint="realsense o usb" />
+               label="Camera Type" hint="realsense or usb" />
 
         <param type="text" name="base_frame" default="base_link" 
-               label="Base Frame" hint="Frame base del robot" />
+               label="Base Frame" hint="Robot base frame" />
 
         <param type="text" name="tool_frame" default="tool0" 
-               label="Tool Frame" hint="Frame del efector" />
+               label="Tool Frame" hint="End-effector frame" />
 
         <param type="boolean" name="eye_in_hand" default="False" 
-               label="Eye-in-Hand" hint="True si cámara en robot, False si está fija" />
+               label="Eye-in-Hand" hint="True if camera on robot, False if fixed" />
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
-               label="Calibration File" hint="Nombre base para archivos de calibración (sin extensión)" />
+               label="Calibration File" hint="Base name for calibration files (without extension)" />
 
-        <!-- Configuración específica para UR5e -->
+        <!-- Specific configuration for UR5e -->
         <param type="text" name="moveit_launch_file" default="ur_moveit.launch.py" 
-               label="MoveIt Launch" hint="Archivo launch de MoveIt para UR" />
+               label="MoveIt Launch" hint="MoveIt launch file for UR" />
 
         <param type="text" name="robot_name" default="ur5e" 
                label="Robot Name" hint="ur5e, ur10, etc." />
 
         <param type="text" name="moveit_config_package" default="ur_moveit_config" 
-               label="MoveIt Config Package" hint="Paquete configuración UR" />
+               label="MoveIt Config Package" hint="UR configuration package" />
 
         <param type="text" name="robot_ip" default="192.168.1.101" 
-               label="Robot IP" hint="IP del robot UR" />
+               label="Robot IP" hint="UR robot IP" />
 
         <param type="boolean" name="use_fake_hardware" default="False" 
-               label="Use Fake Hardware" hint="True para simulación, False para robot real" />
+               label="Use Fake Hardware" hint="True for simulation, False for real robot" />
 
-        <!-- RUTAS (solo lectura) -->
+        <!-- PATHS (read-only) -->
         <param type="text" name="output_folder" 
                default="/home/drims/drims_ws/calibrations" 
                label="Output Folder" 
-               hint="Carpeta raíz donde se guardarán los resultados" 
+               hint="Root folder where results will be saved" 
                readonly="true" />
 
         <param type="text" name="pictures_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
                label="Pictures Folder" 
-               hint="Carpeta para imágenes (se crea automáticamente)" 
+               hint="Folder for images (created automatically)" 
                readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
                label="Robot Poses Folder" 
-               hint="Carpeta para poses del robot (se crea automáticamente)" 
+               hint="Folder for robot poses (created automatically)" 
                readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses" 
                label="Charuco Output Folder" 
-               hint="Carpeta para detecciones intermedias del tablero" 
+               hint="Folder for intermediate board detections" 
                readonly="true" />
     </params>
 

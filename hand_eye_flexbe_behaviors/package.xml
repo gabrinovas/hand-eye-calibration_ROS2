@@ -6,8 +6,8 @@
   <name>hand_eye_flexbe_behaviors</name>
   <version>1.0.0</version>
   <description>
-     Comportamientos FlexBE para calibración ojo-mano.
-     Incluye calibración manual y automática con MoveIt.
+     FlexBE behaviors for hand-eye calibration.
+     Includes manual and automatic calibration with MoveIt.
   </description>
   <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
   <license>MIT</license>

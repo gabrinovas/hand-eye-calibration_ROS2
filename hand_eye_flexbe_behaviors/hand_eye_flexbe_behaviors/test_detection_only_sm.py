@@ -21,16 +21,16 @@ Created on Thu Mar 04 2026
 '''
 class TestDetectionOnlySM(Behavior):
     """
-    Behavior de prueba SOLO para detección y calibración.
+    Test behavior ONLY for detection and calibration.
     
-    Requiere que ya existan:
-    - Imágenes en /calibrations/extrinsic_calibration/pictures/
-    - Poses en /calibrations/extrinsic_calibration/robot_poses/
-    - Calibración intrínseca de cámara
+    Requires that the following already exist:
+    - Images in /calibrations/extrinsic_calibration/pictures/
+    - Poses in /calibrations/extrinsic_calibration/robot_poses/
+    - Camera intrinsic calibration
     
-    RESULTADOS: 
-    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (principal)
-    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones)
+    RESULTS: 
+    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (main)
+    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
     """
     
     def __init__(self, node):
@@ -38,18 +38,18 @@ class TestDetectionOnlySM(Behavior):
         self.name = 'Test Detection Only'
         self.node = node
 
-        # Parámetros del comportamiento
+        # Behavior parameters
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # RUTAS - Definidas correctamente
+        # PATHS - Correctly defined
         base_calib_path = '/home/drims/drims_ws/calibrations'
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
         self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
         self.add_parameter('output_folder', base_calib_path)
 
-        # Inicializar estados
+        # Initialize states
         OfflineFindCharucoState.initialize_ros(node)
         ComputeCalibState.initialize_ros(node)
         OperatableStateMachine.initialize_ros(node)
@@ -61,7 +61,7 @@ class TestDetectionOnlySM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
-        # Variables para pasar datos entre estados
+        # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
 
@@ -69,7 +69,7 @@ class TestDetectionOnlySM(Behavior):
         # [/MANUAL_CREATE]
 
         with _state_machine:
-            # ESTADO 1: Procesar offline con charuco_hand_eye
+            # STATE 1: Process offline with charuco_hand_eye
             OperatableStateMachine.add('Process_Offline',
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
@@ -84,7 +84,7 @@ class TestDetectionOnlySM(Behavior):
                     'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated'
                 })
 
-            # ESTADO 2: Calcular calibración con VISP
+            # STATE 2: Compute calibration with VISP
             OperatableStateMachine.add('Compute_Calibration',
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,

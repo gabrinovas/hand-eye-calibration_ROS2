@@ -3,20 +3,20 @@
 <behavior name="camera_calibration">
 
 	<executable package_path="hand_eye_flexbe_behaviors.camera_calibration_sm" class="camera_calibrationSM" />
-	<tagstring>Calibración de cámara con tablero Charuco</tagstring>
+	<tagstring>Camera calibration with Charuco board</tagstring>
 	<author>Gabriel</author>
-	<date>Tue Nov 15 2022 (Modificado: Feb 2026)</date>
+	<date>Tue Nov 15 2022 (Modified: Feb 2026)</date>
 	<description>
-		Comportamiento para calibración de cámara usando tablero Charuco.
+		Behavior for camera calibration using a Charuco board.
 		
-		Flujo:
-		1. Toma manual de fotos del tablero Charuco en diferentes posiciones
-		2. Calibración automática de la cámara usando charuco_calibrator
-		3. Guardado de resultados en ~/drims_ws/calibrations/camera_intrinsics.yaml
+		Flow:
+		1. Manual capture of Charuco board photos in different positions
+		2. Automatic camera calibration using charuco_calibrator
+		3. Saving results in ~/drims_ws/calibrations/camera_intrinsics.yaml
 		
-		Controles durante captura:
-		- ESPACIO o ENTER: Tomar foto
-		- ESC: Cancelar
+		Controls during capture:
+		- SPACE or ENTER: Take photo
+		- ESC: Cancel
 	</description>
 
 
@@ -25,36 +25,36 @@
 	<!-- Available Parameters -->
 	<params>
 
-		<param type="numeric" name="pic_num" default="30" label="Número de fotos" hint="Número de imágenes a capturar (recomendado: 20-30)">
+		<param type="numeric" name="pic_num" default="30" label="Number of photos" hint="Number of images to capture (recommended: 20-30)">
 			<min value="5" />
 			<max value="100" />
 		</param>
 
-		<param type="numeric" name="square_size" default="0.0200" label="Tamaño del cuadrado (m)" hint="Tamaño del cuadrado del tablero en metros">
+		<param type="numeric" name="square_size" default="0.0200" label="Square size (m)" hint="Board square size in meters">
 			<min value="0.001" />
 			<max value="0.1" />
 		</param>
 
-		<param type="numeric" name="marker_size" default="0.0150" label="Tamaño del marcador (m)" hint="Tamaño del marcador ArUco en metros">
+		<param type="numeric" name="marker_size" default="0.0150" label="Marker size (m)" hint="ArUco marker size in meters">
 			<min value="0.001" />
 			<max value="0.1" />
 		</param>
 
-		<param type="numeric" name="col_count" default="10" label="Columnas" hint="Número de columnas del tablero Charuco">
+		<param type="numeric" name="col_count" default="10" label="Columns" hint="Number of Charuco board columns">
 			<min value="5" />
 			<max value="20" />
 		</param>
 
-		<param type="numeric" name="row_count" default="14" label="Filas" hint="Número de filas del tablero Charuco">
+		<param type="numeric" name="row_count" default="14" label="Rows" hint="Number of Charuco board rows">
 			<min value="5" />
 			<max value="20" />
 		</param>
 
-		<param type="text" name="camera_type" default="realsense" label="Tipo de cámara" hint="Tipo de cámara: 'realsense' o 'usb'" />
+		<param type="text" name="camera_type" default="realsense" label="Camera type" hint="Camera type: 'realsense' or 'usb'" />
 
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="Nombre archivo" hint="Nombre del archivo de calibración (se guardará en ~/drims_ws/calibrations/)" />
+		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (will be saved in ~/drims_ws/calibrations/)" />
 
-		<param type="text" name="output_folder" default="" label="Carpeta personalizada" hint="Carpeta para guardar imágenes (dejar vacío para usar ~/drims_ws/calibrations/camera_calib_pictures/)" />
+		<param type="text" name="output_folder" default="" label="Custom folder" hint="Folder to save images (leave empty to use ~/drims_ws/calibrations/camera_calib_pictures/)" />
 
 	</params>
 

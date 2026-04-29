@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Estado FlexBE para capturar imágenes y poses del robot simultáneamente.
-Adaptado para UR5e.
+FlexBE state to capture images and robot poses simultaneously.
+Adapted for UR5e.
 """
 
 from flexbe_core import EventState, Logger
@@ -21,18 +21,18 @@ from tf2_ros.transform_listener import TransformListener
 
 class TakePoseAndPictureState(EventState):
     """
-    Captura imágenes y poses del robot simultáneamente.
+    Captures images and robot poses simultaneously.
     
-    -- total_poses       int     Número TOTAL de poses a capturar
-    -- camera_type       str     'realsense' o 'usb'
-    -- base_frame        str     Frame base del robot (base_link)
-    -- tool_frame        str     Frame del efector (tool0)
-    -- pictures_folder   str     Carpeta para imágenes
-    -- robot_poses_folder str    Carpeta para poses
-    -- output_folder     str     Carpeta general de salida
-    -- auto_capture      bool    True: captura automática al entrar
+    -- total_poses       int     TOTAL number of poses to capture
+    -- camera_type       str     'realsense' or 'usb'
+    -- base_frame        str     Robot base frame (base_link)
+    -- tool_frame        str     End-effector frame (tool0)
+    -- pictures_folder   str     Folder for images
+    -- robot_poses_folder str    Folder for poses
+    -- output_folder     str     General output folder
+    -- auto_capture      bool    True: automatic capture on enter
     
-    <= done                     Captura completada
+    <= done                     Capture completed
     <= failed                   Error
     """
     
@@ -48,22 +48,22 @@ class TakePoseAndPictureState(EventState):
         self.auto_capture = auto_capture
         self.poses_taken = 0
         
-        # Configurar carpetas
+        # Configure folders
         base_path = os.path.expanduser('~/drims_ws/calibrations')
         self.output_folder = output_folder or os.path.join(base_path, 'extrinsic_calib_charuco_poses')
         self.pictures_folder = pictures_folder or os.path.join(base_path, 'extrinsic_calibration', 'pictures')
         self.robot_poses_folder = robot_poses_folder or os.path.join(base_path, 'extrinsic_calibration', 'robot_poses')
         
-        # Crear carpetas
+        # Create folders
         for folder in [self.pictures_folder, self.robot_poses_folder, self.output_folder]:
             os.makedirs(folder, exist_ok=True)
         
-        # Componentes de cámara
+        # Camera components
         self.pipeline = None
         self.capture = None
         self.color_image = None
         self.window_created = False
-        self.window_name = 'CALIBRACIÓN UR5e - Captura de poses'
+        self.window_name = 'UR5e CALIBRATION - Pose capture'
         self.camera_initialized = False
         self.should_exit = False
         
@@ -72,95 +72,95 @@ class TakePoseAndPictureState(EventState):
         self.tf_listener = None
         
         Logger.loginfo("="*60)
-        Logger.loginfo("📸 ESTADO: TakePoseAndPicture (UR5e)")
+        Logger.loginfo("📸 STATE: TakePoseAndPicture (UR5e)")
         Logger.loginfo("="*60)
-        Logger.loginfo(f"🎯 Objetivo: {self.total_poses} poses")
-        Logger.loginfo(f"📁 Imágenes: {self.pictures_folder}")
+        Logger.loginfo(f"🎯 Target: {self.total_poses} poses")
+        Logger.loginfo(f"📁 Images: {self.pictures_folder}")
         Logger.loginfo(f"📁 Poses: {self.robot_poses_folder}")
         Logger.loginfo(f"📁 Output: {self.output_folder}")
         Logger.loginfo(f"🔧 Frames: {self.base_frame} → {self.tool_frame}")
         
     def on_start(self):
-        """Inicializar: limpiar carpetas y preparar cámara"""
+        """Initialize: clean folders and prepare camera"""
         self._clean_folders()
         
-        # Inicializar TF2
+        # Initialize TF2
         self.tf_listener = TransformListener(self.tf_buffer, self._node, spin_thread=True)
         
-        # Esperar a que TF esté disponible
-        Logger.loginfo("⏳ Esperando transforms del robot...")
+        # Wait for TF to be available
+        Logger.loginfo("⏳ Waiting for robot transforms...")
         time.sleep(2)
         
         self.camera_initialized = self._init_camera()
         
         if not self.camera_initialized:
-            Logger.logerr("❌ No se pudo inicializar la cámara")
+            Logger.logerr("❌ Could not initialize camera")
     
     def _clean_folders(self):
-        """Limpia archivos existentes"""
+        """Cleans existing files"""
         try:
-            # Limpiar imágenes
+            # Clean images
             for ext in ['*.jpg', '*.jpeg', '*.png']:
                 for f in glob.glob(os.path.join(self.pictures_folder, ext)):
                     os.remove(f)
             
-            # Limpiar poses
+            # Clean poses
             for f in glob.glob(os.path.join(self.robot_poses_folder, 'pose_*.yaml')):
                 os.remove(f)
             for f in glob.glob(os.path.join(self.robot_poses_folder, 'pose_*.txt')):
                 os.remove(f)
             
-            Logger.loginfo("🧹 Carpetas limpiadas")
+            Logger.loginfo("🧹 Folders cleaned")
         except Exception as e:
-            Logger.logwarn(f"⚠️ Error limpiando carpetas: {e}")
+            Logger.logwarn(f"⚠️ Error cleaning folders: {e}")
     
     def _init_camera(self):
-        """Inicializa la cámara según el tipo"""
+        """Initializes the camera based on its type"""
         try:
             if self.camera_type == 'realsense':
                 self.pipeline = rs.pipeline()
                 config = rs.config()
                 config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
                 self.pipeline.start(config)
-                Logger.loginfo("✅ RealSense iniciada (1920x1080)")
+                Logger.loginfo("✅ RealSense started (1920x1080)")
                 return True
                 
             elif self.camera_type == 'usb':
-                Logger.loginfo("🔌 Abriendo cámara USB...")
+                Logger.loginfo("🔌 Opening USB camera...")
                 self.capture = cv2.VideoCapture(0)
                 self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
                 self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
                 
                 if self.capture.isOpened():
-                    # Verificar resolución real
+                    # Verify real resolution
                     width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    Logger.loginfo(f"✅ Cámara USB iniciada: {width}x{height}")
+                    Logger.loginfo(f"✅ USB camera started: {width}x{height}")
                     return True
                 else:
-                    Logger.logerr("❌ No se pudo abrir cámara USB")
+                    Logger.logerr("❌ Could not open USB camera")
                     return False
             else:
-                Logger.logerr(f"❌ Tipo de cámara desconocido: {self.camera_type}")
+                Logger.logerr(f"❌ Unknown camera type: {self.camera_type}")
                 return False
                 
         except Exception as e:
-            Logger.logerr(f"❌ Error iniciando cámara: {e}")
+            Logger.logerr(f"❌ Error starting camera: {e}")
             return False
     
     def _get_robot_pose(self):
-        """Obtiene la pose actual del robot desde TF"""
+        """Obtains current robot pose from TF"""
         try:
-            # Para UR5e, el frame tool0 debe estar publicado
+            # For UR5e, tool0 frame must be published
             if not self.tf_buffer.can_transform(
                 self.base_frame, 
                 self.tool_frame, 
                 rclpy.time.Time(),
                 timeout=Duration(seconds=1.0)
             ):
-                # Listar frames disponibles para debug
+                # List available frames for debug
                 frames = self.tf_buffer.all_frames_as_string()
-                Logger.logwarn(f"Frames disponibles: {frames[:200]}...")
+                Logger.logwarn(f"Available frames: {frames[:200]}...")
                 return None
             
             transform = self.tf_buffer.lookup_transform(
@@ -171,11 +171,11 @@ class TakePoseAndPictureState(EventState):
             return transform
             
         except Exception as e:
-            Logger.logerr(f"❌ Error obteniendo pose del robot: {e}")
+            Logger.logerr(f"❌ Error getting robot pose: {e}")
             return None
     
     def _save_pose(self, transform, index):
-        """Guarda la pose en YAML y TXT"""
+        """Saves the pose in YAML and TXT"""
         pose_data = {
             'index': index,
             'timestamp': time.time(),
@@ -193,49 +193,49 @@ class TakePoseAndPictureState(EventState):
             ]
         }
         
-        # Guardar YAML
+        # Save YAML
         yaml_path = os.path.join(self.robot_poses_folder, f"pose_{index:03d}.yaml")
         with open(yaml_path, 'w') as f:
             yaml.dump(pose_data, f, default_flow_style=False, sort_keys=False)
         
-        # Guardar TXT (formato simple para compatibilidad)
+        # Save TXT (simple format for compatibility)
         txt_path = os.path.join(self.robot_poses_folder, f"pose_{index:03d}.txt")
         with open(txt_path, 'w') as f:
             f.write(f"{pose_data['position'][0]:.6f} {pose_data['position'][1]:.6f} {pose_data['position'][2]:.6f} ")
             f.write(f"{pose_data['orientation'][0]:.6f} {pose_data['orientation'][1]:.6f} ")
             f.write(f"{pose_data['orientation'][2]:.6f} {pose_data['orientation'][3]:.6f}")
         
-        Logger.loginfo(f"   💾 Pose guardada: {os.path.basename(yaml_path)}")
+        Logger.loginfo(f"   💾 Pose saved: {os.path.basename(yaml_path)}")
         
         return yaml_path, txt_path
     
     def _perform_capture(self):
-        """Ejecuta la captura de imagen y pose"""
-        # Obtener pose del robot
+        """Executes image and pose capture"""
+        # Get robot pose
         robot_pose = self._get_robot_pose()
         if robot_pose is None:
-            Logger.logwarn("⚠️ No se pudo obtener pose del robot, no se guarda")
+            Logger.logwarn("⚠️ Could not get robot pose, not saving")
             return False
         
-        # Guardar imagen
+        # Save image
         img_file = os.path.join(self.pictures_folder, f"image_{self.poses_taken + 1:03d}.jpg")
         cv2.imwrite(img_file, self.color_image)
         
-        # Guardar pose
+        # Save pose
         yaml_file, txt_file = self._save_pose(robot_pose, self.poses_taken + 1)
         
         self.poses_taken += 1
-        Logger.loginfo(f"✅ CAPTURA {self.poses_taken}/{self.total_poses}")
-        Logger.loginfo(f"   📸 Imagen: {os.path.basename(img_file)}")
+        Logger.loginfo(f"✅ CAPTURE {self.poses_taken}/{self.total_poses}")
+        Logger.loginfo(f"   📸 Image: {os.path.basename(img_file)}")
         
         if self.poses_taken >= self.total_poses:
-            Logger.loginfo(f"🎯 Objetivo alcanzado: {self.total_poses} poses")
+            Logger.loginfo(f"🎯 Target reached: {self.total_poses} poses")
             self.should_exit = True
         
         return True
     
     def execute(self, userdata):
-        """Bucle principal de captura"""
+        """Main capture loop"""
         if self.should_exit:
             self._cleanup()
             return 'done'
@@ -244,7 +244,7 @@ class TakePoseAndPictureState(EventState):
             return 'failed'
         
         try:
-            # Obtener frame de cámara
+            # Get camera frame
             if self.camera_type == 'realsense':
                 frames = self.pipeline.wait_for_frames(timeout_ms=5000)
                 color_frame = frames.get_color_frame()
@@ -254,53 +254,53 @@ class TakePoseAndPictureState(EventState):
             else:  # USB
                 ret, self.color_image = self.capture.read()
                 if not ret:
-                    Logger.logerr("❌ Error leyendo de cámara USB")
+                    Logger.logerr("❌ Error reading from USB camera")
                     return 'failed'
             
-            # Crear ventana si no existe
+            # Create window if it does not exist
             if not self.window_created:
                 cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
                 cv2.resizeWindow(self.window_name, 1280, 720)
                 self.window_created = True
             
-            # Preparar visualización
+            # Prepare display
             display = self.color_image.copy()
             remaining = self.total_poses - self.poses_taken
             
-            # Overlay de información
+            # Information overlay
             h, w = display.shape[:2]
             overlay = display.copy()
             cv2.rectangle(overlay, (10, 10), (w-10, 220), (0, 0, 0), -1)
             cv2.addWeighted(overlay, 0.6, display, 0.4, 0, display)
             
-            # Texto informativo
-            cv2.putText(display, f"🤖 UR5e - CALIBRACIÓN EXTRÍNSECA", 
+            # Informative text
+            cv2.putText(display, f"🤖 UR5e - EXTRINSIC CALIBRATION", 
                        (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2)
-            cv2.putText(display, f"📸 CAPTURADAS: {self.poses_taken}/{self.total_poses}", 
+            cv2.putText(display, f"📸 CAPTURED: {self.poses_taken}/{self.total_poses}", 
                        (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
-            cv2.putText(display, f"⏳ FALTAN: {remaining}", 
+            cv2.putText(display, f"⏳ REMAINING: {remaining}", 
                        (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
-            cv2.putText(display, f"👉 ESPACIO: Capturar | ESC: Cancelar", 
+            cv2.putText(display, f"👉 SPACE: Capture | ESC: Cancel", 
                        (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
             
             cv2.imshow(self.window_name, display)
             key = cv2.waitKey(1) & 0xFF
             
-            # Procesar teclas
-            if key in [13, 32]:  # ENTER o ESPACIO
+            # Process keys
+            if key in [13, 32]:  # ENTER or SPACE
                 self._perform_capture()
             elif key == 27:  # ESC
-                Logger.logwarn("⏹️ Captura cancelada por usuario")
+                Logger.logwarn("⏹️ Capture canceled by user")
                 self._cleanup()
                 return 'failed'
             
         except Exception as e:
-            Logger.logerr(f"❌ Error en ejecución: {e}")
+            Logger.logerr(f"❌ Error during execution: {e}")
             self._cleanup()
             return 'failed'
     
     def _cleanup(self):
-        """Limpieza de recursos"""
+        """Resource cleanup"""
         try:
             if self.window_created:
                 cv2.destroyAllWindows()
@@ -315,7 +315,7 @@ class TakePoseAndPictureState(EventState):
                 self.capture = None
                 
         except Exception as e:
-            Logger.logwarn(f"⚠️ Error en limpieza: {e}")
+            Logger.logwarn(f"⚠️ Error during cleanup: {e}")
     
     def on_stop(self):
         self._cleanup()

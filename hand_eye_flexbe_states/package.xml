@@ -6,9 +6,9 @@
   <name>hand_eye_flexbe_states</name>
   <version>1.0.0</version>
   <description>
-     Estados FlexBE personalizados para calibración ojo-mano.
-     Incluye estados para captura de poses, lanzamiento de MoveIt,
-     procesamiento offline y cálculo de calibración con VISP.
+     Custom FlexBE states for hand-eye calibration.
+     Includes states for pose capture, launching MoveIt,
+     offline processing, and calibration computation with VISP.
   </description>
   <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
   <license>MIT</license>

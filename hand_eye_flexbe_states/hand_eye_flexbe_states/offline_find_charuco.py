@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Estado FlexBE para procesar offline las poses de Charuco.
-Inicia el nodo charuco_hand_eye y espera a que publique.
+FlexBE state to process Charuco poses offline.
+Starts the charuco_hand_eye node and waits for it to publish.
 """
 
 from flexbe_core import EventState, Logger
@@ -18,7 +18,7 @@ import tf_transformations
 
 class OfflineFindCharucoState(EventState):
     """
-    Inicia el nodo de detección de Charuco y espera a que publique.
+    Starts the Charuco detection node and waits for it to publish.
     """
     
     def __init__(self, pictures_folder, robot_poses_folder, output_folder=None, eye_in_hand=False):
@@ -36,30 +36,30 @@ class OfflineFindCharucoState(EventState):
         self.base_h_tool_accumulated = None
         self.camera_h_charuco_accumulated = None
         self.received_data = False
-        self.max_wait_time = 120  # segundos máximo de espera
+        self.max_wait_time = 120  # Max waiting time in seconds
         self.start_time = None
         
-        # Suscripciones
+        # Subscriptions
         self.world_effector_sub = None
         self.camera_object_sub = None
         
         Logger.loginfo("="*60)
-        Logger.loginfo("🔍 ESTADO: OfflineFindCharuco")
+        Logger.loginfo("🔍 STATE: OfflineFindCharuco")
         Logger.loginfo("="*60)
-        Logger.loginfo(f"📁 Imágenes: {self.pictures_folder}")
-        Logger.loginfo(f"📁 Poses robot: {self.robot_poses_folder}")
-        Logger.loginfo(f"📁 Salida: {self.output_folder}")
-        Logger.loginfo(f"🎯 Modo: {'Eye-in-hand' if eye_in_hand else 'Eye-to-hand'}")
+        Logger.loginfo(f"📁 Images: {self.pictures_folder}")
+        Logger.loginfo(f"📁 Robot poses: {self.robot_poses_folder}")
+        Logger.loginfo(f"📁 Output: {self.output_folder}")
+        Logger.loginfo(f"🎯 Mode: {'Eye-in-hand' if eye_in_hand else 'Eye-to-hand'}")
         
     def on_enter(self, userdata):
-        """Iniciar nodo de detección y suscribirse"""
+        """Start detection node and subscribe"""
         self.received_data = False
         self.start_time = time.time()
         
-        # Crear carpeta de salida si no existe
+        # Create output folder if it doesn't exist
         os.makedirs(self.output_folder, exist_ok=True)
         
-        # Limpiar datos anteriores
+        # Clear previous data
         self.base_h_tool_accumulated = TransformArray()
         self.camera_h_charuco_accumulated = TransformArray()
         
@@ -71,19 +71,19 @@ class OfflineFindCharucoState(EventState):
         self.camera_h_charuco_accumulated.header.stamp = self._node.get_clock().now().to_msg()
         self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
         
-        # Verificar si ya hay detecciones guardadas
+        # Check if there are already saved detections
         detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
         if os.path.exists(detections_file):
-            Logger.loginfo("📂 Cargando detecciones desde archivo existente...")
+            Logger.loginfo("📂 Loading detections from existing file...")
             if self._load_from_file():
-                Logger.loginfo("✅ Detecciones cargadas desde archivo")
+                Logger.loginfo("✅ Detections loaded from file")
                 self.received_data = True
                 return
         
-        # Si no hay archivo, lanzar nodo
+        # If no file, launch node
         self._launch_charuco_node()
         
-        # Crear suscripciones usando el nodo de FlexBE
+        # Create subscriptions using FlexBE node
         self.world_effector_sub = self._node.create_subscription(
             TransformArray,
             '/world_effector_poses',
@@ -98,19 +98,19 @@ class OfflineFindCharucoState(EventState):
             10
         )
         
-        Logger.loginfo("⏳ Esperando detecciones del nodo charuco_hand_eye...")
+        Logger.loginfo("⏳ Waiting for detections from charuco_hand_eye node...")
     
     def _launch_charuco_node(self):
-        """Lanza el nodo charuco_hand_eye"""
+        """Launches the charuco_hand_eye node"""
         try:
-            # Verificar si ya está corriendo
+            # Check if it is already running
             if self._is_charuco_running():
-                Logger.loginfo("✅ Nodo charuco_hand_eye ya está corriendo")
+                Logger.loginfo("✅ charuco_hand_eye node is already running")
                 return
             
-            Logger.loginfo("🚀 Lanzando nodo charuco_hand_eye...")
+            Logger.loginfo("🚀 Launching charuco_hand_eye node...")
             
-            # Convertir booleano a string 'true'/'false' para ROS2
+            # Convert boolean to string 'true'/'false' for ROS2
             eye_in_hand_str = 'true' if self.eye_in_hand else 'false'
             
             cmd = [
@@ -125,7 +125,7 @@ class OfflineFindCharucoState(EventState):
                 '-p', 'save_results:=True'
             ]
             
-            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
+            Logger.loginfo(f"📋 Command: {' '.join(cmd)}")
             
             self.charuco_process = subprocess.Popen(
                 cmd,
@@ -135,23 +135,23 @@ class OfflineFindCharucoState(EventState):
                 text=True
             )
             
-            # Esperar a que inicie
-            Logger.loginfo("⏳ Esperando a que el nodo Charuco inicie...")
+            # Wait for startup
+            Logger.loginfo("⏳ Waiting for Charuco node to start...")
             time.sleep(5)
             
-            # Verificar si el proceso sigue vivo
+            # Check if the process is still alive
             if self.charuco_process.poll() is not None:
-                # El proceso terminó, leer error
+                # Process terminated, read error
                 stdout, stderr = self.charuco_process.communicate()
-                Logger.logerr(f"❌ El nodo Charuco terminó prematuramente")
+                Logger.logerr(f"❌ Charuco node terminated prematurely")
                 if stderr:
                     Logger.logerr(f"Error: {stderr}")
             
         except Exception as e:
-            Logger.logerr(f"❌ Error lanzando charuco_hand_eye: {e}")
+            Logger.logerr(f"❌ Error launching charuco_hand_eye: {e}")
     
     def _is_charuco_running(self):
-        """Verifica si el nodo está corriendo"""
+        """Verifies if the node is running"""
         try:
             result = subprocess.run(
                 ['ros2', 'node', 'list'],
@@ -165,7 +165,7 @@ class OfflineFindCharucoState(EventState):
             return False
     
     def _load_from_file(self):
-        """Carga detecciones desde archivo YAML"""
+        """Loads detections from YAML file"""
         try:
             detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
             
@@ -178,7 +178,7 @@ class OfflineFindCharucoState(EventState):
             if not data or 'pairs' not in data:
                 return False
             
-            # Construir mensajes TransformArray desde el archivo
+            # Build TransformArray messages from file
             world_effector_msg = TransformArray()
             camera_object_msg = TransformArray()
             
@@ -209,7 +209,7 @@ class OfflineFindCharucoState(EventState):
                 t = pair['charuco_translation']
                 R = np.array(pair['charuco_rotation_matrix'])
                 
-                # Matriz de rotación a cuaternión
+                # Rotation matrix to quaternion
                 T = np.eye(4)
                 T[:3, :3] = R
                 quat_charuco = tf_transformations.quaternion_from_matrix(T)
@@ -228,66 +228,66 @@ class OfflineFindCharucoState(EventState):
             self.base_h_tool_accumulated = world_effector_msg
             self.camera_h_charuco_accumulated = camera_object_msg
             
-            Logger.loginfo(f"✅ Cargados {len(world_effector_msg.transforms)} pares desde archivo")
+            Logger.loginfo(f"✅ Loaded {len(world_effector_msg.transforms)} pairs from file")
             return True
             
         except Exception as e:
-            Logger.logwarn(f"⚠️ Error cargando archivo: {e}")
+            Logger.logwarn(f"⚠️ Error loading file: {e}")
             return False
     
     def world_effector_callback(self, msg):
-        """Callback para poses del robot"""
+        """Callback for robot poses"""
         self.base_h_tool_accumulated = msg
         self._check_complete()
     
     def camera_object_callback(self, msg):
-        """Callback para poses del charuco"""
+        """Callback for charuco poses"""
         self.camera_h_charuco_accumulated = msg
         self._check_complete()
     
     def _check_complete(self):
-        """Verifica si ya tenemos todos los datos"""
+        """Verifies if we already have all the data"""
         if (hasattr(self.base_h_tool_accumulated, 'transforms') and 
             hasattr(self.camera_h_charuco_accumulated, 'transforms') and
             len(self.base_h_tool_accumulated.transforms) > 0 and 
             len(self.camera_h_charuco_accumulated.transforms) > 0 and
             len(self.base_h_tool_accumulated.transforms) == len(self.camera_h_charuco_accumulated.transforms)):
             self.received_data = True
-            Logger.loginfo(f"✅ Recibidos {len(self.base_h_tool_accumulated.transforms)} pares de calibración")
+            Logger.loginfo(f"✅ Received {len(self.base_h_tool_accumulated.transforms)} calibration pairs")
     
     def execute(self, userdata):
-        """Ejecución: esperar datos o timeout"""
+        """Execution: wait for data or timeout"""
         if self.received_data:
             userdata.base_h_tool_accumulated = self.base_h_tool_accumulated
             userdata.camera_h_charuco_accumulated = self.camera_h_charuco_accumulated
             return 'completed'
         
-        # Verificar timeout
+        # Check timeout
         elapsed = time.time() - self.start_time
         if elapsed > self.max_wait_time:
-            Logger.logerr(f"❌ Timeout esperando detecciones ({self.max_wait_time}s)")
+            Logger.logerr(f"❌ Timeout waiting for detections ({self.max_wait_time}s)")
             return 'failed'
         
-        return None  # Seguir esperando
+        return None  # Keep waiting
     
     def on_stop(self):
-        """Limpiar al terminar"""
-        # Cancelar suscripciones
+        """Clean up on finish"""
+        # Cancel subscriptions
         if self.world_effector_sub:
             self._node.destroy_subscription(self.world_effector_sub)
         if self.camera_object_sub:
             self._node.destroy_subscription(self.camera_object_sub)
         
-        # Detener proceso Charuco si lo iniciamos
+        # Stop Charuco process if we started it
         if self.charuco_process:
-            Logger.loginfo("🛑 Deteniendo nodo Charuco...")
+            Logger.loginfo("🛑 Stopping Charuco node...")
             try:
-                # Enviar SIGINT
+                # Send SIGINT
                 os.killpg(os.getpgid(self.charuco_process.pid), signal.SIGINT)
                 self.charuco_process.wait(timeout=5)
             except:
                 try:
-                    # Forzar terminación
+                    # Force termination
                     self.charuco_process.terminate()
                     self.charuco_process.wait(timeout=3)
                 except:
@@ -296,4 +296,4 @@ class OfflineFindCharucoState(EventState):
                     except:
                         pass
             self.charuco_process = None
-            Logger.loginfo("✅ Nodo Charuco detenido")
+            Logger.loginfo("✅ Charuco node stopped")

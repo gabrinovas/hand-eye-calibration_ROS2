@@ -7,51 +7,51 @@
     <author>Gabriel Novas</author>
     <date>2026-03-04</date>
     <description>
-        Behavior de prueba SOLO para detección y calibración.
+        Test behavior ONLY for detection and calibration.
         
-        Requiere que ya existan:
-        - Imágenes en /calibrations/extrinsic_calibration/pictures/
-        - Poses en /calibrations/extrinsic_calibration/robot_poses/
-        - Calibración intrínseca de cámara en /calibrations/intrinsic_calibration/calibration.yaml
+        Requires that the following already exist:
+        - Images in /calibrations/extrinsic_calibration/pictures/
+        - Poses in /calibrations/extrinsic_calibration/robot_poses/
+        - Camera intrinsic calibration in /calibrations/intrinsic_calibration/calibration.yaml
         
-        FLUJO:
-        1. Process_Offline: Detecta Charuco en imágenes guardadas
-           - Lee imágenes y poses
-           - Guarda detecciones en /calibrations/extrinsic_calibration/charuco_table_poses/
+        FLOW:
+        1. Process_Offline: Detects Charuco in saved images
+           - Reads images and poses
+           - Saves detections in /calibrations/extrinsic_calibration/charuco_table_poses/
            
-        2. Compute_Calibration: Calcula calibración con VISP
-           - Usa VISP para calcular transformación cámara-robot
-           - Guarda resultado en /calibrations/camera_extrinsics.yaml
+        2. Compute_Calibration: Calculates calibration with VISP
+           - Uses VISP to calculate camera-robot transformation
+           - Saves result in /calibrations/camera_extrinsics.yaml
         
-        RESULTADOS FINALES:
-        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (calibración principal)
-        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones intermedias)
+        FINAL RESULTS:
+        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (main calibration)
+        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
     </description>
 
     <!-- Available Parameters -->
     <params>
         <param type="boolean" name="eye_in_hand" default="False" 
-               label="Eye-in-Hand" hint="True si cámara en robot" />
+               label="Eye-in-Hand" hint="True if camera on robot" />
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
-               label="Calibration File" hint="Nombre archivo salida (se guardará en carpeta base)" />
+               label="Calibration File" hint="Output file name (will be saved in base folder)" />
 
-        <!-- RUTAS (solo lectura) -->
+        <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
-               label="Pictures Folder" hint="Carpeta con imágenes" readonly="true" />
+               label="Pictures Folder" hint="Folder with images" readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
-               label="Robot Poses Folder" hint="Carpeta con poses" readonly="true" />
+               label="Robot Poses Folder" hint="Folder with poses" readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
                default="/home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses" 
-               label="Charuco Output Folder" hint="Carpeta para detecciones intermedias" readonly="true" />
+               label="Charuco Output Folder" hint="Folder for intermediate detections" readonly="true" />
 
         <param type="text" name="output_folder" 
                default="/home/drims/drims_ws/calibrations" 
-               label="Output Folder" hint="Carpeta base de resultados" readonly="true" />
+               label="Output Folder" hint="Base folder for results" readonly="true" />
     </params>
 
 </behavior>

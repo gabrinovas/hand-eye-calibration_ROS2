@@ -22,12 +22,12 @@ Created on Tue Nov 15 2022
 '''
 class camera_calibrationSM(Behavior):
     '''
-    Calibración de cámara con tablero Charuco
+    Camera calibration with Charuco board
     
-    Este behavior permite:
-    1. Capturar imágenes del tablero Charuco manualmente (ENTER/ESPACIO)
-    2. Calibrar la cámara automáticamente usando charuco_calibrator
-    3. Guardar los resultados en ~/drims_ws/calibrations/camera_intrinsics.yaml
+    This behavior allows:
+    1. Manually capturing Charuco board images (ENTER/SPACE)
+    2. Automatically calibrating the camera using charuco_calibrator
+    3. Saving the results in ~/drims_ws/calibrations/camera_intrinsics.yaml
     '''
 
 

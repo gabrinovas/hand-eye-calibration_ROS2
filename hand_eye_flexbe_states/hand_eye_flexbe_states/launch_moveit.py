@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Estado FlexBE para lanzar MoveIt automáticamente para UR5e.
+FlexBE state to launch MoveIt automatically for UR5e.
 """
 
 from flexbe_core import EventState, Logger
@@ -12,16 +12,16 @@ from ament_index_python.packages import get_package_share_directory
 
 class LaunchMoveItState(EventState):
     """
-    Lanza MoveIt con la interfaz gráfica para UR5e.
+    Launches MoveIt with GUI for UR5e.
     
-    -- moveit_launch_file    string   Archivo launch de MoveIt
-    -- robot_name            string   Nombre del robot (ur5e)
-    -- moveit_config_package string   Paquete de configuración
-    -- robot_ip              string   IP del robot UR
-    -- use_fake_hardware     bool     Usar simulación o robot real
+    -- moveit_launch_file    string   MoveIt launch file
+    -- robot_name            string   Robot name (ur5e)
+    -- moveit_config_package string   Configuration package
+    -- robot_ip              string   UR robot IP
+    -- use_fake_hardware     bool     Use simulation or real robot
     
-    <= done                     MoveIt lanzado (aunque no esté 100% listo)
-    <= failed                   Error al lanzar
+    <= done                     MoveIt launched (even if not 100% ready)
+    <= failed                   Error during launch
     """
     
     def __init__(self, moveit_launch_file='ur_moveit.launch.py', 
@@ -40,23 +40,23 @@ class LaunchMoveItState(EventState):
         self.launch_attempted = False
         
     def on_start(self):
-        """Lanzar MoveIt al iniciar el estado"""
+        """Launch MoveIt when starting the state"""
         if self.launch_attempted:
             return
             
         self.launch_attempted = True
         
         try:
-            # Verificación rápida: si ya hay nodos de MoveIt, no lanzamos
+            # Quick check: if MoveIt nodes exist, do not launch
             if self._is_moveit_basically_running():
-                Logger.loginfo("✅ MoveIt ya está corriendo")
+                Logger.loginfo("✅ MoveIt is already running")
                 return
             
             Logger.loginfo("="*60)
-            Logger.loginfo("🚀 Lanzando MoveIt para UR5e...")
+            Logger.loginfo("🚀 Launching MoveIt for UR5e...")
             Logger.loginfo("="*60)
             
-            # Comando simplificado
+            # Simplified command
             cmd = [
                 'ros2', 'launch',
                 self.moveit_config_package,
@@ -67,13 +67,13 @@ class LaunchMoveItState(EventState):
                 'launch_rviz:=true'
             ]
             
-            Logger.loginfo(f"📋 Comando: {' '.join(cmd)}")
+            Logger.loginfo(f"📋 Command: {' '.join(cmd)}")
             
-            # Variables de entorno
+            # Environment variables
             env = os.environ.copy()
             env['DISPLAY'] = ':0'
             
-            # Lanzar en proceso separado
+            # Launch in separate process
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
@@ -82,17 +82,17 @@ class LaunchMoveItState(EventState):
                 env=env
             )
             
-            # Esperar SOLO 3 segundos para que inicie lo básico
-            Logger.loginfo("⏳ Esperando 3 segundos para que MoveIt inicie...")
+            # Wait ONLY 3 seconds for basic startup
+            Logger.loginfo("⏳ Waiting 3 seconds for MoveIt to start...")
             time.sleep(3)
             
-            Logger.loginfo("✅ MoveIt lanzado, continuando con la captura...")
+            Logger.loginfo("✅ MoveIt launched, continuing with capture...")
             
         except Exception as e:
-            Logger.logerr(f"❌ Error lanzando MoveIt: {str(e)}")
+            Logger.logerr(f"❌ Error launching MoveIt: {str(e)}")
     
     def _is_moveit_basically_running(self):
-        """Verificación rápida: solo mira si existe el nodo move_group"""
+        """Quick check: only looks if move_group node exists"""
         try:
             result = subprocess.run(
                 ['ros2', 'node', 'list'],
@@ -105,9 +105,9 @@ class LaunchMoveItState(EventState):
             return False
     
     def execute(self, userdata):
-        """Siempre retorna done para continuar con la captura"""
+        """Always return done to continue with capture"""
         return 'done'
     
     def on_stop(self):
-        """No hacemos nada, MoveIt sigue corriendo"""
+        """Do nothing, MoveIt keeps running"""
         pass

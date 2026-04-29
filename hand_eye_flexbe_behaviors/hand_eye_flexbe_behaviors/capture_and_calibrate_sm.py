@@ -23,18 +23,18 @@ Created on Thu Feb 26 2026
 '''
 class CaptureAndCalibrateSM(Behavior):
     """
-    Comportamiento COMPLETO para calibración ojo-mano:
+    FULL Hand-Eye Calibration Behavior:
     
-    FASE 1: Lanza MoveIt + RViz automáticamente
-    FASE 2: Tú controlas el robot con la interfaz de MoveIt
-            Presionas ESPACIO en cada pose para capturar
-    FASE 3: Procesamiento offline con charuco_hand_eye
-    FASE 4: Cálculo automático de calibración con VISP
+    PHASE 1: Launches MoveIt + RViz automatically
+    PHASE 2: You control the robot using MoveIt interface
+             Press SPACE at each pose to capture
+    PHASE 3: Offline processing with charuco_hand_eye
+    PHASE 4: Automatic calibration computation with VISP
     
-    RESULTADOS FINALES:
-    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (calibración principal)
-    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detecciones intermedias)
-    - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (matrices T_w2c y T_c2w)
+    FINAL RESULTS:
+    - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (main calibration)
+    - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
+    - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
     """
     
     def __init__(self, node):
@@ -42,7 +42,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.name = 'Capture and Calibrate Hand-Eye'
         self.node = node
 
-        # Parámetros del comportamiento
+        # Behavior parameters
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense')
         self.add_parameter('base_frame', 'base_link')
@@ -50,21 +50,21 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # Parámetros de MoveIt para UR5e
+        # MoveIt parameters for UR5e
         self.add_parameter('moveit_launch_file', 'ur_moveit.launch.py')
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('moveit_config_package', 'ur_moveit_config')
         self.add_parameter('robot_ip', '192.168.1.101')
         self.add_parameter('use_fake_hardware', False)
         
-        # RUTAS UNIFICADAS - Todo en /home/drims/drims_ws/calibrations
+        # UNIFIED PATHS - Everything in /home/drims/drims_ws/calibrations
         base_calib_path = '/home/drims/drims_ws/calibrations'
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
         self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
         self.add_parameter('output_folder', base_calib_path)
 
-        # Inicializar estados
+        # Initialize states
         LaunchMoveItState.initialize_ros(node)
         TakePoseAndPictureState.initialize_ros(node)
         OfflineFindCharucoState.initialize_ros(node)
@@ -78,7 +78,7 @@ class CaptureAndCalibrateSM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
-        # Variables para pasar datos entre estados
+        # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
 
@@ -86,7 +86,7 @@ class CaptureAndCalibrateSM(Behavior):
         # [/MANUAL_CREATE]
 
         with _state_machine:
-            # ESTADO 1: Lanzar MoveIt
+            # STATE 1: Launch MoveIt
             OperatableStateMachine.add('Launch_MoveIt',
                 LaunchMoveItState(
                     moveit_launch_file=self.moveit_launch_file,
@@ -98,7 +98,7 @@ class CaptureAndCalibrateSM(Behavior):
                 transitions={'done': 'Capture_Poses', 'failed': 'failed'},
                 autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
-            # ESTADO 2: Capturar poses (tú con ESPACIO)
+            # STATE 2: Capture poses (you with SPACE)
             OperatableStateMachine.add('Capture_Poses',
                 TakePoseAndPictureState(
                     total_poses=self.total_poses,
@@ -112,7 +112,7 @@ class CaptureAndCalibrateSM(Behavior):
                 transitions={'done': 'Process_Offline', 'failed': 'failed'},
                 autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
-            # ESTADO 3: Procesar offline con charuco_hand_eye
+            # STATE 3: Process offline with charuco_hand_eye
             OperatableStateMachine.add('Process_Offline',
                 OfflineFindCharucoState(
                     pictures_folder=self.pictures_folder,
@@ -127,7 +127,7 @@ class CaptureAndCalibrateSM(Behavior):
                     'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated'
                 })
 
-            # ESTADO 4: Calcular calibración con VISP
+            # STATE 4: Compute calibration with VISP
             OperatableStateMachine.add('Compute_Calibration',
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,
