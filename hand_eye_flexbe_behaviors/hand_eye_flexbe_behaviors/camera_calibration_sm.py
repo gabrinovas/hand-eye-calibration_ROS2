@@ -27,7 +27,7 @@ class camera_calibrationSM(Behavior):
     This behavior allows:
     1. Manually capturing Charuco board images (ENTER/SPACE)
     2. Automatically calibrating the camera using charuco_calibrator
-    3. Saving the results in ~/drims_ws/calibrations/camera_intrinsics.yaml
+    3. Saving the results in ~/calibrations/camera_intrinsics.yaml
     '''
 
 

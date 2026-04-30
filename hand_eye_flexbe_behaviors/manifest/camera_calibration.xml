@@ -12,7 +12,7 @@
 		Flow:
 		1. Manual capture of Charuco board photos in different positions
 		2. Automatic camera calibration using charuco_calibrator
-		3. Saving results in ~/drims_ws/calibrations/camera_intrinsics.yaml
+		3. Saving results in ~/calibrations/camera_intrinsics.yaml
 		
 		Controls during capture:
 		- SPACE or ENTER: Take photo
@@ -52,9 +52,9 @@
 
 		<param type="text" name="camera_type" default="realsense" label="Camera type" hint="Camera type: 'realsense' or 'usb'" />
 
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (will be saved in ~/drims_ws/calibrations/)" />
+		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (will be saved in ~/calibrations/)" />
 
-		<param type="text" name="output_folder" default="" label="Custom folder" hint="Folder to save images (leave empty to use ~/drims_ws/calibrations/camera_calib_pictures/)" />
+		<param type="text" name="output_folder" default="" label="Custom folder" hint="Folder to save images (leave empty to use ~/calibrations/camera_calib_pictures/)" />
 
 	</params>
 

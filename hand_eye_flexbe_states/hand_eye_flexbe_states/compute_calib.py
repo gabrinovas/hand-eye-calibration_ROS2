@@ -51,7 +51,7 @@ class ComputeCalibState(EventState):
         self._service_ready = False
         
         # Configure output folders
-        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations'
+        self.output_folder = output_folder or '/home/drims/calibrations'
         self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
         os.makedirs(self.calib_results_folder, exist_ok=True)
         
@@ -73,10 +73,10 @@ class ComputeCalibState(EventState):
         self.yaml_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.yaml")
         
         # Main output file
-        self.main_output_file = '/home/drims/drims_ws/calibrations/camera_extrinsics.yaml'
+        self.main_output_file = '/home/drims/calibrations/camera_extrinsics.yaml'
         
         # Duplicate detections file to delete
-        self.temp_detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+        self.temp_detections_file = '/home/drims/calibrations/charuco_detections.yaml'
         
         # Config parser for INI
         self.config = configparser.ConfigParser()

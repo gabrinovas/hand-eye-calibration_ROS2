@@ -31,10 +31,10 @@ class CharucoCameraCalibrationState(EventState):
         if images_folder:
             self.images_folder = images_folder
         else:
-            self.images_folder = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
+            self.images_folder = os.path.expanduser('~/calibrations/camera_calib_pictures')
         
         self.pic_folder = self.images_folder
-        self.calibration_output_folder = os.path.expanduser('~/drims_ws/calibrations')
+        self.calibration_output_folder = os.path.expanduser('~/calibrations')
         self.final_output_path = os.path.join(self.calibration_output_folder, 'camera_intrinsics.yaml')
         
         # OpenCV 4.5.4 API (the one that works with Charuco)

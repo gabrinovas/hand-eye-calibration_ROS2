@@ -49,7 +49,7 @@ class TakePoseAndPictureState(EventState):
         self.poses_taken = 0
         
         # Configure folders
-        base_path = os.path.expanduser('~/drims_ws/calibrations')
+        base_path = os.path.expanduser('~/calibrations')
         self.output_folder = output_folder or os.path.join(base_path, 'extrinsic_calib_charuco_poses')
         self.pictures_folder = pictures_folder or os.path.join(base_path, 'extrinsic_calibration', 'pictures')
         self.robot_poses_folder = robot_poses_folder or os.path.join(base_path, 'extrinsic_calibration', 'robot_poses')

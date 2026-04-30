@@ -25,11 +25,11 @@
                 - Compact format with T_w2c and T_c2w for integration
         
         FINAL RESULTS:
-        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (detailed calibration)
-        - /home/drims/drims_ws/calibrations/extrinsic_matrix.yaml (compact format)
-        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
-        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.ini (INI format)
-        - /home/drims/drims_ws/calibrations/calibration_results/camera_extrinsics.yaml (detailed copy)
+        - /home/drims/calibrations/camera_extrinsics.yaml (detailed calibration)
+        - /home/drims/calibrations/extrinsic_matrix.yaml (compact format)
+        - /home/drims/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
+        - /home/drims/calibrations/calibration_results/camera_extrinsics.ini (INI format)
+        - /home/drims/calibrations/calibration_results/camera_extrinsics.yaml (detailed copy)
     </description>
 
     <!-- Available Parameters -->
@@ -74,25 +74,25 @@
 
         <!-- PATHS (read-only) -->
         <param type="text" name="output_folder" 
-               default="/home/drims/drims_ws/calibrations" 
+               default="/home/drims/calibrations" 
                label="Output Folder" 
                hint="Root folder where results will be saved" 
                readonly="true" />
 
         <param type="text" name="pictures_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
+               default="/home/drims/calibrations/extrinsic_calibration/pictures" 
                label="Pictures Folder" 
                hint="Folder for images (created automatically)" 
                readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
+               default="/home/drims/calibrations/extrinsic_calibration/robot_poses" 
                label="Robot Poses Folder" 
                hint="Folder for robot poses (created automatically)" 
                readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses" 
+               default="/home/drims/calibrations/extrinsic_calibration/charuco_table_poses" 
                label="Charuco Output Folder" 
                hint="Folder for intermediate board detections" 
                readonly="true" />

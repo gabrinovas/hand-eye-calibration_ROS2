@@ -24,8 +24,8 @@
            - Saves result in /calibrations/camera_extrinsics.yaml
         
         FINAL RESULTS:
-        - /home/drims/drims_ws/calibrations/camera_extrinsics.yaml (main calibration)
-        - /home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
+        - /home/drims/calibrations/camera_extrinsics.yaml (main calibration)
+        - /home/drims/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
     </description>
 
     <!-- Available Parameters -->
@@ -38,19 +38,19 @@
 
         <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/pictures" 
+               default="/home/drims/calibrations/extrinsic_calibration/pictures" 
                label="Pictures Folder" hint="Folder with images" readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/robot_poses" 
+               default="/home/drims/calibrations/extrinsic_calibration/robot_poses" 
                label="Robot Poses Folder" hint="Folder with poses" readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
-               default="/home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses" 
+               default="/home/drims/calibrations/extrinsic_calibration/charuco_table_poses" 
                label="Charuco Output Folder" hint="Folder for intermediate detections" readonly="true" />
 
         <param type="text" name="output_folder" 
-               default="/home/drims/drims_ws/calibrations" 
+               default="/home/drims/calibrations" 
                label="Output Folder" hint="Base folder for results" readonly="true" />
     </params>
 

@@ -43,7 +43,7 @@ class TakePictureState(EventState):
         if output_folder:
             self.save_pwd = output_folder
         else:
-            self.save_pwd = os.path.expanduser('~/drims_ws/calibrations/camera_calib_pictures')
+            self.save_pwd = os.path.expanduser('~/calibrations/camera_calib_pictures')
         
         # Create directory if it doesn't exist
         os.makedirs(self.save_pwd, exist_ok=True)

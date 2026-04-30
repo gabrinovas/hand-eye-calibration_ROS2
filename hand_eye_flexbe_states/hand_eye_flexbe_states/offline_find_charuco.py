@@ -29,7 +29,7 @@ class OfflineFindCharucoState(EventState):
         
         self.pictures_folder = pictures_folder
         self.robot_poses_folder = robot_poses_folder
-        self.output_folder = output_folder or '/home/drims/drims_ws/calibrations/extrinsic_calibration/charuco_table_poses'
+        self.output_folder = output_folder or '/home/drims/calibrations/extrinsic_calibration/charuco_table_poses'
         self.eye_in_hand = eye_in_hand
         
         self.charuco_process = None
@@ -72,7 +72,7 @@ class OfflineFindCharucoState(EventState):
         self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
         
         # Check if there are already saved detections
-        detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+        detections_file = '/home/drims/calibrations/charuco_detections.yaml'
         if os.path.exists(detections_file):
             Logger.loginfo("📂 Loading detections from existing file...")
             if self._load_from_file():
@@ -120,7 +120,7 @@ class OfflineFindCharucoState(EventState):
                 '-p', f'robot_poses_folder:={self.robot_poses_folder}',
                 '-p', f'output_folder:={self.output_folder}',
                 '-p', f'eye_in_hand:={eye_in_hand_str}',
-                '-p', 'camera_intrinsics_file:=/home/drims/drims_ws/calibrations/camera_intrinsics.yaml',
+                '-p', 'camera_intrinsics_file:=/home/drims/calibrations/camera_intrinsics.yaml',
                 '-p', 'publish_rate:=0.5',
                 '-p', 'save_results:=True'
             ]
@@ -167,7 +167,7 @@ class OfflineFindCharucoState(EventState):
     def _load_from_file(self):
         """Loads detections from YAML file"""
         try:
-            detections_file = '/home/drims/drims_ws/calibrations/charuco_detections.yaml'
+            detections_file = '/home/drims/calibrations/charuco_detections.yaml'
             
             if not os.path.exists(detections_file):
                 return False
