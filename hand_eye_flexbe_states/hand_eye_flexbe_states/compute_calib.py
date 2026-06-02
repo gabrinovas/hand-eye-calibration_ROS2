@@ -247,17 +247,12 @@ class ComputeCalibState(EventState):
             req.world_effector.transforms = userdata.base_h_tool.transforms
             req.camera_object.transforms = userdata.camera_h_charuco.transforms
         else:
-            # Eye-to-hand mode: invert only the robot transform
-            Logger.loginfo("🔄 Eye-to-hand mode: inverting only robot transform (base_h_tool)")
+            # Eye-to-hand mode: visp_hand2eye_calibration ROS node handles the inversion internally
+            # when launched with eye_in_hand:=false. We pass the poses directly.
+            Logger.loginfo("🔄 Eye-to-hand mode: passing poses directly (ViSP node handles inversion)")
             
-            for t in userdata.base_h_tool.transforms:
-                inv = self._invert_transform(t)
-                req.world_effector.transforms.append(inv)
-            
-            # Camera to charuco transform is NOT inverted in eye-to-hand
-            # The equation is: (bMe)^-1 * bMc * cMo = eMo (Constant)
-            for t in userdata.camera_h_charuco.transforms:
-                req.camera_object.transforms.append(t)
+            req.world_effector.transforms = userdata.base_h_tool.transforms
+            req.camera_object.transforms = userdata.camera_h_charuco.transforms
         
         try:
             # Call service
