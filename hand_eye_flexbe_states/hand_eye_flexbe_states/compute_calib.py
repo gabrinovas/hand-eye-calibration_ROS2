@@ -247,11 +247,9 @@ class ComputeCalibState(EventState):
             req.world_effector.transforms = userdata.base_h_tool.transforms
             req.camera_object.transforms = userdata.camera_h_charuco.transforms
         else:
-            # Eye-to-hand mode: visp_hand2eye_calibration ROS node handles the inversion internally
-            # when launched with eye_in_hand:=false. We pass the poses directly.
-            Logger.loginfo("🔄 Eye-to-hand mode: passing poses directly (ViSP node handles inversion)")
-            
-            req.world_effector.transforms = userdata.base_h_tool.transforms
+            # Eye-to-hand mode: invert world_effector transforms manually
+            Logger.loginfo("🔄 Eye-to-hand mode: inverting world_effector transforms manually")
+            req.world_effector.transforms = [self._invert_transform(p) for p in userdata.base_h_tool.transforms]
             req.camera_object.transforms = userdata.camera_h_charuco.transforms
         
         try:
