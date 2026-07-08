@@ -297,24 +297,31 @@ class ComputeCalibState(EventState):
             return 'failed'
     
     def _invert_transform(self, t):
-        """Inverts a transformation"""
-        # Homogeneous matrix
-        T = np.eye(4)
-        quat = [t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]
-        R = tf_transformations.quaternion_matrix(quat)[:3, :3]
-        T[:3, :3] = R
-        T[:3, 3] = [t.translation.x, t.translation.y, t.translation.z]
+        """Inverts a transformation using scipy as recommended"""
+        from scipy.spatial.transform import Rotation as R
         
-        # Invert
-        T_inv = np.linalg.inv(T)
+        # Extract quaternion (x, y, z, w) and position
+        quat = [t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]
+        pos = [t.translation.x, t.translation.y, t.translation.z]
+        
+        # 1. Convert to 3x3 rotation matrix using scipy
+        rot_matrix = R.from_quat(quat).as_matrix()
+        
+        # 2. Translation vector (3x1)
+        t_vector = np.array(pos).reshape(3, 1)
+        
+        # Invert rotation and translation to be "base to tool"
+        R_base2gripper = rot_matrix.T
+        t_base2gripper = -rot_matrix.T @ t_vector
         
         # Create inverse transform
         inv = Transform()
-        inv.translation.x = float(T_inv[0, 3])
-        inv.translation.y = float(T_inv[1, 3])
-        inv.translation.z = float(T_inv[2, 3])
+        inv.translation.x = float(t_base2gripper[0, 0])
+        inv.translation.y = float(t_base2gripper[1, 0])
+        inv.translation.z = float(t_base2gripper[2, 0])
         
-        quat_inv = tf_transformations.quaternion_from_matrix(T_inv)
+        # Convert back to quaternion
+        quat_inv = R.from_matrix(R_base2gripper).as_quat()
         inv.rotation.x = float(quat_inv[0])
         inv.rotation.y = float(quat_inv[1])
         inv.rotation.z = float(quat_inv[2])
