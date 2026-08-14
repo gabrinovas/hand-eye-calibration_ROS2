@@ -32,9 +32,9 @@ class CaptureAndCalibrateSM(Behavior):
     PHASE 4: Automatic calibration computation with VISP
     
     FINAL RESULTS:
-    - /home/drims/calibrations/camera_extrinsics.yaml (main calibration)
-    - /home/drims/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
-    - /home/drims/calibrations/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
+    - ~/calibrations/camera_extrinsics.yaml (main calibration)
+    - ~/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
+    - ~/calibrations/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
     """
     
     def __init__(self, node):
@@ -57,8 +57,8 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_ip', '192.168.1.101')
         self.add_parameter('use_fake_hardware', False)
         
-        # UNIFIED PATHS - Everything in /home/drims/calibrations
-        base_calib_path = '/home/drims/calibrations'
+        # UNIFIED PATHS - Dynamically resolved to user home
+        base_calib_path = os.path.expanduser('~/calibrations')
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
         self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')

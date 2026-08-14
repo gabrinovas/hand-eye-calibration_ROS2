@@ -29,8 +29,8 @@ class TestDetectionOnlySM(Behavior):
     - Camera intrinsic calibration
     
     RESULTS: 
-    - /home/drims/calibrations/camera_extrinsics.yaml (main)
-    - /home/drims/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
+    - ~/calibrations/camera_extrinsics.yaml (main)
+    - ~/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
     """
     
     def __init__(self, node):
@@ -42,8 +42,8 @@ class TestDetectionOnlySM(Behavior):
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # PATHS - Correctly defined
-        base_calib_path = '/home/drims/calibrations'
+        # PATHS - Dynamically resolved to user home
+        base_calib_path = os.path.expanduser('~/calibrations')
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
         self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
