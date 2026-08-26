@@ -39,10 +39,11 @@ class TestDetectionOnlySM(Behavior):
         self.node = node
 
         # Behavior parameters
+        self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # PATHS - Dynamically resolved to user home
+        # PATHS - Dynamically resolved to user home per robot
         base_calib_path = os.path.expanduser('~/calibrations')
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
@@ -61,6 +62,15 @@ class TestDetectionOnlySM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
+        # Normalize robot directory name and adjust paths
+        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
+        
+        self.output_folder = robot_calib_path
+        self.pictures_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
+        self.robot_poses_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
+        self.charuco_output_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'charuco_table_poses')
+
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None

@@ -8,7 +8,6 @@
 ###########################################################
 
 from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
-from hand_eye_flexbe_states.register_ip_popup import RegisterIPPopupState
 from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
@@ -53,7 +52,6 @@ class CaptureAndCalibrateSM(Behavior):
         # Robot parameters
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('robot_ip', '192.168.1.101')
-        self.add_parameter('register_new_ip_popup', False)
         self.add_parameter('use_fake_hardware', False)
         
         # UNIFIED PATHS - Dynamically resolved to user home per robot
@@ -64,7 +62,6 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('output_folder', base_calib_path)
 
         # Initialize states
-        RegisterIPPopupState.initialize_ros(node)
         LaunchMoveItState.initialize_ros(node)
         TakePoseAndPictureState.initialize_ros(node)
         OfflineFindCharucoState.initialize_ros(node)
@@ -119,15 +116,6 @@ class CaptureAndCalibrateSM(Behavior):
         # [/MANUAL_CREATE]
 
         with _state_machine:
-            # STATE 0: Register IP Popup (Optional)
-            OperatableStateMachine.add('Register_IP_Popup',
-                RegisterIPPopupState(
-                    register_new_ip_popup=self.register_new_ip_popup,
-                    robot_ip=self.robot_ip
-                ),
-                transitions={'done': 'Launch_MoveIt', 'failed': 'failed'},
-                autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
-
             # STATE 1: Launch MoveIt
             OperatableStateMachine.add('Launch_MoveIt',
                 LaunchMoveItState(

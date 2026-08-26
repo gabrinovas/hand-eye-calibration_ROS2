@@ -62,11 +62,7 @@
             <option value="192.168.1.101" />
         </param>
 
-        <!-- 5. Register New IP Popup -->
-        <param type="boolean" name="register_new_ip_popup" default="False" 
-               label="Register New IP (Popup GUI)" hint="If checked, opens a GUI popup window at startup with Save and Exit buttons to register a new Robot IP into the manifest." />
-
-        <!-- 6. Intrinsic Profile -->
+        <!-- 5. Intrinsic Profile -->
         <param type="enum" name="camera_intrinsics_file" default="latest" 
                label="Intrinsic Calibration Profile" hint="Select intrinsic camera profile from dropdown menu">
             <option value="latest" />

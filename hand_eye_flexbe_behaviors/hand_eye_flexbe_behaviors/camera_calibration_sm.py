@@ -48,7 +48,9 @@ class camera_calibrationSM(Behavior):
         self.add_parameter('row_count', 14)
         self.add_parameter('camera_type', 'realsense')
         self.add_parameter('save_file_name', 'camera_intrinsics.yaml')
-        self.add_parameter('output_folder', '')
+        
+        base_intrinsic_path = os.path.expanduser('~/calibrations/intrinsic_calibrations')
+        self.add_parameter('output_folder', os.path.join(base_intrinsic_path, 'camera_calib_pictures'))
 
         # references to used behaviors
 
@@ -64,6 +66,9 @@ class camera_calibrationSM(Behavior):
     def create(self):
         # x:570 y:120, x:130 y:365
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
+
+        if not self.output_folder:
+            self.output_folder = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
 
         # Additional creation code can be added inside the following tags
         # [MANUAL_CREATE]

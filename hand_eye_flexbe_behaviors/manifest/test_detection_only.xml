@@ -30,11 +30,18 @@
 
     <!-- Available Parameters -->
     <params>
+        <param type="enum" name="robot_name" default="ur5e" 
+               label="Robot Name" hint="Select robot model (ur5e, ufactory_lite6, or other) to resolve calibration folder">
+            <option value="ur5e" />
+            <option value="ufactory_lite6" />
+            <option value="other" />
+        </param>
+
         <param type="boolean" name="eye_in_hand" default="False" 
                label="Eye-in-Hand" hint="True if camera on robot" />
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
-               label="Calibration File" hint="Output file name (will be saved in base folder)" />
+               label="Calibration File" hint="Output file name (saved in ~/calibrations/robot_name/)" />
 
         <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
