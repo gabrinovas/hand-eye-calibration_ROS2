@@ -38,13 +38,15 @@ class ComputeCalibState(EventState):
     """
     
     def __init__(self, eye_in_hand_mode, calibration_file_name, 
-                 customize_file=False, launch_visp=True, output_folder=None):
+                 robot_name='ur5e', customize_file=False,
+                 launch_visp=True, output_folder=None):
         super().__init__(
             outcomes=['finish', 'failed'],
             input_keys=['base_h_tool', 'camera_h_charuco']
         )
         
         self.eye_in_hand_mode = eye_in_hand_mode
+        self.robot_name = robot_name
         self.launch_visp = launch_visp
         self.visp_process = None
         self.calib_client = None
@@ -64,9 +66,9 @@ class ComputeCalibState(EventState):
             self.calibration_base_name = base_name
         else:
             if eye_in_hand_mode:
-                self.calibration_base_name = "eye_in_hand_calibration_ur5e"
+                self.calibration_base_name = f"eye_in_hand_calibration_{self.robot_name}"
             else:
-                self.calibration_base_name = "eye_to_hand_calibration_ur5e"
+                self.calibration_base_name = f"eye_to_hand_calibration_{self.robot_name}"
         
         # Output files with correct extensions
         self.ini_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.ini")
@@ -83,7 +85,7 @@ class ComputeCalibState(EventState):
         self.config.optionxform = str
         
         Logger.loginfo("="*60)
-        Logger.loginfo("🔧 STATE: ComputeCalibState (UR5e)")
+        Logger.loginfo(f"🔧 STATE: ComputeCalibState ({self.robot_name})")
         Logger.loginfo("="*60)
         Logger.loginfo(f"🎯 Mode: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
         Logger.loginfo(f"📁 Base file: {self.calibration_base_name}")
@@ -263,7 +265,7 @@ class ComputeCalibState(EventState):
             
             # Show result
             Logger.loginfo("="*60)
-            Logger.loginfo("✅ CALIBRATION COMPLETED - UR5e")
+            Logger.loginfo(f"✅ CALIBRATION COMPLETED - {self.robot_name}")
             Logger.loginfo("="*60)
             Logger.loginfo(f"📐 Translation (meters):")
             Logger.loginfo(f"   x = {res.effector_camera.translation.x:.6f}")
@@ -361,7 +363,7 @@ class ComputeCalibState(EventState):
         self.config.set("hand_eye_calibration", "qw", str(transform.rotation.w))
         self.config.set("hand_eye_calibration", "num_poses_used", str(num_poses))
         self.config.set("hand_eye_calibration", "eye_in_hand", str(self.eye_in_hand_mode))
-        self.config.set("hand_eye_calibration", "robot_model", "ur5e")
+        self.config.set("hand_eye_calibration", "robot_model", str(self.robot_name))
         self.config.set("hand_eye_calibration", "timestamp", str(time.time()))
         
         with open(ini_path, 'w') as f:
@@ -391,7 +393,7 @@ class ComputeCalibState(EventState):
         # Convert all numpy values to native floats
         calib_data = {
             'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'robot_model': 'ur5e',
+            'robot_model': str(self.robot_name),
             'eye_in_hand': bool(self.eye_in_hand_mode),
             'num_poses_used': int(num_poses),
             'transform_matrix': transform_matrix,

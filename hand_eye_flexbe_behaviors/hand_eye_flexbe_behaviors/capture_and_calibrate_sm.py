@@ -45,7 +45,7 @@ class CaptureAndCalibrateSM(Behavior):
         # Behavior parameters
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense')
-        self.add_parameter('base_frame', 'base_link')
+        self.add_parameter('base_frame', 'base')
         self.add_parameter('tool_frame', 'tool0')
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
@@ -78,6 +78,17 @@ class CaptureAndCalibrateSM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
+        # Auto-adjust default MoveIt and frame parameters if ufactory_lite6 is selected with default UR settings
+        if 'lite6' in self.robot_name.lower():
+            if self.moveit_config_package == 'ur_moveit_config':
+                self.moveit_config_package = 'xarm_moveit_config'
+            if self.moveit_launch_file == 'ur_moveit.launch.py':
+                self.moveit_launch_file = 'lite6_moveit_fake.launch.py'
+            if self.base_frame == 'base':
+                self.base_frame = 'link_base'
+            if self.tool_frame == 'tool0':
+                self.tool_frame = 'link_eef'
+        
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
@@ -103,6 +114,7 @@ class CaptureAndCalibrateSM(Behavior):
                 TakePoseAndPictureState(
                     total_poses=self.total_poses,
                     camera_type=self.camera_type,
+                    robot_name=self.robot_name,
                     base_frame=self.base_frame,
                     tool_frame=self.tool_frame,
                     pictures_folder=self.pictures_folder,
@@ -118,7 +130,8 @@ class CaptureAndCalibrateSM(Behavior):
                     pictures_folder=self.pictures_folder,
                     robot_poses_folder=self.robot_poses_folder,
                     output_folder=self.charuco_output_folder,
-                    eye_in_hand=self.eye_in_hand
+                    eye_in_hand=self.eye_in_hand,
+                    robot_name=self.robot_name
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
                 autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},
@@ -132,6 +145,7 @@ class CaptureAndCalibrateSM(Behavior):
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,
                     calibration_file_name=self.calibration_file_name,
+                    robot_name=self.robot_name,
                     customize_file=True,
                     launch_visp=True,
                     output_folder=self.output_folder

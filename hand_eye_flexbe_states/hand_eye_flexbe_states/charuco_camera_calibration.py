@@ -17,7 +17,7 @@ class CharucoCameraCalibrationState(EventState):
     <= failed                                   Calibration error
     """
     
-    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None):
+    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None, robot_name='ur5e'):
         """Constructor"""
         super(CharucoCameraCalibrationState, self).__init__(outcomes=['done', 'failed'])
         
@@ -26,6 +26,7 @@ class CharucoCameraCalibrationState(EventState):
         self.col_count = col_count
         self.row_count = row_count
         self.save_file_name = save_file_name
+        self.robot_name = robot_name
         
         # Determine images folder
         if images_folder:
@@ -179,7 +180,7 @@ class CharucoCameraCalibrationState(EventState):
                 dist_coeffs=dist_coeffs,
                 image_size=image_size,
                 robot_id=1,
-                robot_name="ur5e",
+                robot_name=self.robot_name,
                 robot_ip="192.168.1.101"
             )
             

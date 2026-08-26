@@ -44,11 +44,11 @@
         <param type="text" name="camera_type" default="realsense" 
                label="Camera Type" hint="realsense or usb" />
 
-        <param type="text" name="base_frame" default="base_link" 
-               label="Base Frame" hint="Robot base frame" />
+        <param type="text" name="base_frame" default="base" 
+               label="Base Frame" hint="Robot base frame (e.g. base for UR5e, link_base for ufactory_lite6)" />
 
         <param type="text" name="tool_frame" default="tool0" 
-               label="Tool Frame" hint="End-effector frame" />
+               label="Tool Frame" hint="End-effector frame (e.g. tool0 for UR5e, link_eef for ufactory_lite6)" />
 
         <param type="boolean" name="eye_in_hand" default="False" 
                label="Eye-in-Hand" hint="True if camera on robot, False if fixed" />
@@ -56,18 +56,18 @@
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
                label="Calibration File" hint="Base name for calibration files (without extension)" />
 
-        <!-- Specific configuration for UR5e -->
+        <!-- Robot configuration parameters -->
         <param type="text" name="moveit_launch_file" default="ur_moveit.launch.py" 
-               label="MoveIt Launch" hint="MoveIt launch file for UR" />
+               label="MoveIt Launch" hint="MoveIt launch file (ur_moveit.launch.py or lite6_moveit_fake.launch.py / lite6_moveit_realmove.launch.py)" />
 
         <param type="text" name="robot_name" default="ur5e" 
-               label="Robot Name" hint="ur5e, ur10, etc." />
+               label="Robot Name" hint="ur5e or ufactory_lite6" />
 
         <param type="text" name="moveit_config_package" default="ur_moveit_config" 
-               label="MoveIt Config Package" hint="UR configuration package" />
+               label="MoveIt Config Package" hint="MoveIt configuration package (ur_moveit_config or xarm_moveit_config)" />
 
         <param type="text" name="robot_ip" default="192.168.1.101" 
-               label="Robot IP" hint="UR robot IP" />
+               label="Robot IP" hint="Robot IP address" />
 
         <param type="boolean" name="use_fake_hardware" default="False" 
                label="Use Fake Hardware" hint="True for simulation, False for real robot" />

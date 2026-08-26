@@ -98,7 +98,18 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=<UR_TYPE> robot_ip:=<I
 - To do test with moveIt, use:
 ```bash
 ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur5e launch_rviz:=true
+```
 
+As example using UFactory Lite 6:
+- MoveIt package: `xarm_moveit_config` (or `ufactory_moveit_config`)
+- Frames: `base_frame` = `link_base`, `tool_frame` = `link_eef`
+- To test with MoveIt (fake/simulation):
+```bash
+ros2 launch xarm_moveit_config lite6_moveit_fake.launch.py add_gripper:=true launch_rviz:=true
+```
+- To test with real robot hardware:
+```bash
+ros2 launch xarm_moveit_config lite6_moveit_realmove.launch.py robot_ip:=<IP_OF_THE_ROBOT> add_gripper:=true launch_rviz:=true
 ```
 
 #### Quick start
@@ -147,7 +158,7 @@ After this, you can press `Runtime Control` on the top, execution window will sh
 
 Before press `Start Execution`, parameter `eye_in_hand` decide which calibration mode you want to use (`True` for eye-in-hand, `False` for eye-to-hand), 
 `calib_pose_num` means how many sample points you want,
-`base_link` , `tip_link` means the base coordinate and end-effector coordinate's name, 
+`base` , `tip_link` means the base coordinate and end-effector coordinate's name, 
 `calibration_file_name` means the name of save file. `move_distance` means the distance of each sample points,
 parameter `customize_file` , decide whether you want to change save file name or not.
 
