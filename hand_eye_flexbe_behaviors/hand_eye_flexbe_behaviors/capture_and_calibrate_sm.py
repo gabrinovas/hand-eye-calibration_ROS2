@@ -48,6 +48,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('base_frame', 'base')
         self.add_parameter('tool_frame', 'tool0')
         self.add_parameter('eye_in_hand', False)
+        self.add_parameter('camera_intrinsics_file', 'latest')
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
         # MoveIt parameters for UR5e
@@ -57,7 +58,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_ip', '192.168.1.101')
         self.add_parameter('use_fake_hardware', False)
         
-        # UNIFIED PATHS - Dynamically resolved to user home
+        # UNIFIED PATHS - Dynamically resolved to user home per robot
         base_calib_path = os.path.expanduser('~/calibrations')
         self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
         self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
@@ -78,12 +79,21 @@ class CaptureAndCalibrateSM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
+        # Normalize robot directory name and adjust defaults
+        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
+        
+        self.output_folder = robot_calib_path
+        self.pictures_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
+        self.robot_poses_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
+        self.charuco_output_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'charuco_table_poses')
+
         # Auto-adjust default MoveIt and frame parameters if ufactory_lite6 is selected with default UR settings
         if 'lite6' in self.robot_name.lower():
             if self.moveit_config_package == 'ur_moveit_config':
                 self.moveit_config_package = 'xarm_moveit_config'
             if self.moveit_launch_file == 'ur_moveit.launch.py':
-                self.moveit_launch_file = 'lite6_moveit_fake.launch.py'
+                self.moveit_launch_file = 'lite6_moveit_fake.launch.py' if self.use_fake_hardware else 'lite6_moveit_realmove.launch.py'
             if self.base_frame == 'base':
                 self.base_frame = 'link_base'
             if self.tool_frame == 'tool0':
@@ -131,7 +141,8 @@ class CaptureAndCalibrateSM(Behavior):
                     robot_poses_folder=self.robot_poses_folder,
                     output_folder=self.charuco_output_folder,
                     eye_in_hand=self.eye_in_hand,
-                    robot_name=self.robot_name
+                    robot_name=self.robot_name,
+                    camera_intrinsics_file=self.camera_intrinsics_file
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
                 autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},

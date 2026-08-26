@@ -12,7 +12,7 @@
 		Flow:
 		1. Manual capture of Charuco board photos in different positions
 		2. Automatic camera calibration using charuco_calibrator
-		3. Saving results in ~/calibrations/camera_intrinsics.yaml
+		3. Saving timestamped results in ~/calibrations/intrinsic_calibrations/camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml and updating default ~/calibrations/camera_intrinsics.yaml
 		
 		Controls during capture:
 		- SPACE or ENTER: Take photo
@@ -50,7 +50,10 @@
 			<max value="20" />
 		</param>
 
-		<param type="text" name="camera_type" default="realsense" label="Camera type" hint="Camera type: 'realsense' or 'usb'" />
+		<param type="enum" name="camera_type" default="realsense" label="Camera type" hint="Camera type driver">
+			<option value="realsense" />
+			<option value="usb" />
+		</param>
 
 		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (will be saved in ~/calibrations/)" />
 

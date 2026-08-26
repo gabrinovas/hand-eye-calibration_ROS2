@@ -112,56 +112,27 @@ ros2 launch xarm_moveit_config lite6_moveit_fake.launch.py add_gripper:=true lau
 ros2 launch xarm_moveit_config lite6_moveit_realmove.launch.py robot_ip:=<IP_OF_THE_ROBOT> add_gripper:=true launch_rviz:=true
 ```
 
-#### Quick start
-### For using manual hand eye calibration
-Note:Here we use Realsense D435i+UR5e, 
-we use whole method with FlexBE and ROS2, open camera with ROS2 first:
-- Open camera
-```bash
-cd ~/<your ros2_realsense workspace>
-source install/setup.bash
-ros2 launch realsense2_camera rs_launch.py rgb_camera.profile:=1920x1080x30 
-```
-WARN:Here use 1080p as camera resolution, because we use 1080p as camera calibration resolution,
-if you want to change resolution, need to do camera calibration again with the resolution you change.
+## Dual Robot Support & Calibration Results Hierarchy
 
-- Then launch flexbe_app flexbe_full.launch.
-```bash
-ros2 launch flexbe_app flexbe_full.launch
-```
-- Open charuco detector
-```bash
-ros2 launch charuco_detector hand_eye_calibration.launch.py
-```
-- Open visp_hand2eye_calibration server
-```bash
-ros2 run visp_hand2eye_calibration visp_hand2eye_calibration_calibrator
-```
-Note: In ros.yaml file we save in `charuco_detector/config/`
-parameter `squaresSidesSizeM` is for for charuco board's squares side size, default is `0.0200`
-parameter `markersSidesSizeM` is for for charuco board's markers side size, default is `0.0150`
-parameter `numberOfBitsForMarkersSides` is for for charuco board's markers side size, default is `4`
-parameter `numberOfMarkers` is for for charuco board's markers side size, default is `70`
-parameter `numberOfSquaresInX` is for for charuco board's markers side size, default is `10`
-parameter `numberOfSquaresInY` is for for charuco board's markers side size, default is `14`
-parameter `dictionaryId` is for for charuco board's markers side size, default is `3`
-parameter `image_topic` is for recieve camera image on ROS, default is `/camera/color/image_raw`
-parameter `camera_info` is for recieve camera info on ROS, default is `/camera/color/camera_info`
+This repository supports seamless switching between **Universal Robots UR5e** and **UFactory Lite 6**.
 
-Must colcon build --symlink-install after edit config file.
+### Folder Organization (`~/calibrations/`)
+- **Camera Intrinsics (`~/calibrations/intrinsic_calibrations/`)**:
+  - Saved with exact timestamp labels: `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
+  - Active/latest intrinsic calibration is also mirrored at `~/calibrations/camera_intrinsics.yaml`.
+- **Extrinsic Calibrations per Robot**:
+  - **UR5e**: `~/calibrations/ur5e/` (`extrinsic_calibration/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
+  - **UFactory Lite 6**: `~/calibrations/ufactory_lite6/` (`extrinsic_calibration/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
+  - The latest computed extrinsics are synced to top-level `~/calibrations/` for root-level compatibility.
 
-Then, press `Load Behavior` on the top, and select `Manual Hand Eye Calibration` in left window.
+### FlexBE Behavior Parameters (`capture_and_calibrate`)
+- **`robot_name`**: Set to `ur5e` or `ufactory_lite6`.
+  - **UR5e**: Uses `ur_moveit_config`, `ur_moveit.launch.py`, `base_frame` = `base`, `tool_frame` = `tool0`.
+  - **UFactory Lite 6**: Uses `xarm_moveit_config`, `lite6_moveit_fake.launch.py` (sim) / `lite6_moveit_realmove.launch.py` (real), `base_frame` = `link_base`, `tool_frame` = `link_eef`.
+- **`camera_intrinsics_file`**: Set to `'latest'` to use the newest intrinsic file, or enter a specific timestamped filename from `~/calibrations/intrinsic_calibrations/` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
+- **`use_fake_hardware`**: `True` for simulation (fake controllers), `False` for real hardware.
 
-After this, you can press `Runtime Control` on the top, execution window will show:
+---
 
-<center><img src="doc/resource/maunal_hand_eye_cali.png" alt="maunal_hand_eye_calib_execute" style="width: 80%;"/></center>
-
-Before press `Start Execution`, parameter `eye_in_hand` decide which calibration mode you want to use (`True` for eye-in-hand, `False` for eye-to-hand), 
-`calib_pose_num` means how many sample points you want,
-`base` , `tip_link` means the base coordinate and end-effector coordinate's name, 
-`calibration_file_name` means the name of save file. `move_distance` means the distance of each sample points,
-parameter `customize_file` , decide whether you want to change save file name or not.
-
-## Result file
-
-Result will save in `install/charuco_detector/share/charuco_detector/config/hand_eye_calibration/` .
+## Result Files
+Results are exported per-robot under `~/calibrations/<robot_name>/` and synced to `~/calibrations/`.

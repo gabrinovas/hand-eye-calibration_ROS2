@@ -59,11 +59,14 @@ class TakePoseAndPictureState(EventState):
         else:
             self.tool_frame = tool_frame
         
-        # Configure folders
+        # Configure folders per robot
         base_path = os.path.expanduser('~/calibrations')
-        self.output_folder = output_folder or os.path.join(base_path, 'extrinsic_calib_charuco_poses')
-        self.pictures_folder = pictures_folder or os.path.join(base_path, 'extrinsic_calibration', 'pictures')
-        self.robot_poses_folder = robot_poses_folder or os.path.join(base_path, 'extrinsic_calibration', 'robot_poses')
+        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        robot_calib_path = os.path.join(base_path, robot_folder)
+        
+        self.output_folder = output_folder or os.path.join(robot_calib_path, 'extrinsic_calib_charuco_poses')
+        self.pictures_folder = pictures_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
+        self.robot_poses_folder = robot_poses_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
         
         # Create folders
         for folder in [self.pictures_folder, self.robot_poses_folder, self.output_folder]:

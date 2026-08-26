@@ -41,30 +41,55 @@
             <max value="50" />
         </param>
 
-        <param type="text" name="camera_type" default="realsense" 
-               label="Camera Type" hint="realsense or usb" />
+        <param type="enum" name="camera_type" default="realsense" 
+               label="Camera Type" hint="Select camera driver">
+            <option value="realsense" />
+            <option value="usb" />
+        </param>
 
-        <param type="text" name="base_frame" default="base" 
-               label="Base Frame" hint="Robot base frame (e.g. base for UR5e, link_base for ufactory_lite6)" />
+        <param type="enum" name="base_frame" default="base" 
+               label="Base Frame" hint="Robot base frame (base for UR5e, link_base for ufactory_lite6)">
+            <option value="base" />
+            <option value="link_base" />
+        </param>
 
-        <param type="text" name="tool_frame" default="tool0" 
-               label="Tool Frame" hint="End-effector frame (e.g. tool0 for UR5e, link_eef for ufactory_lite6)" />
+        <param type="enum" name="tool_frame" default="tool0" 
+               label="Tool Frame" hint="End-effector frame (tool0 for UR5e, link_eef for ufactory_lite6)">
+            <option value="tool0" />
+            <option value="link_eef" />
+        </param>
 
         <param type="boolean" name="eye_in_hand" default="False" 
                label="Eye-in-Hand" hint="True if camera on robot, False if fixed" />
+
+        <param type="enum" name="camera_intrinsics_file" default="latest" 
+               label="Intrinsic Calibration Profile" hint="Select intrinsic camera profile from dropdown menu">
+            <option value="latest" />
+            <option value="camera_intrinsics_2026-03-04_09-02-39.yaml" />
+        </param>
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
                label="Calibration File" hint="Base name for calibration files (without extension)" />
 
         <!-- Robot configuration parameters -->
-        <param type="text" name="moveit_launch_file" default="ur_moveit.launch.py" 
-               label="MoveIt Launch" hint="MoveIt launch file (ur_moveit.launch.py or lite6_moveit_fake.launch.py / lite6_moveit_realmove.launch.py)" />
+        <param type="enum" name="robot_name" default="ur5e" 
+               label="Robot Name" hint="Select robot model">
+            <option value="ur5e" />
+            <option value="ufactory_lite6" />
+        </param>
 
-        <param type="text" name="robot_name" default="ur5e" 
-               label="Robot Name" hint="ur5e or ufactory_lite6" />
+        <param type="enum" name="moveit_config_package" default="ur_moveit_config" 
+               label="MoveIt Config Package" hint="Select MoveIt configuration package">
+            <option value="ur_moveit_config" />
+            <option value="xarm_moveit_config" />
+        </param>
 
-        <param type="text" name="moveit_config_package" default="ur_moveit_config" 
-               label="MoveIt Config Package" hint="MoveIt configuration package (ur_moveit_config or xarm_moveit_config)" />
+        <param type="enum" name="moveit_launch_file" default="ur_moveit.launch.py" 
+               label="MoveIt Launch" hint="Select MoveIt launch file">
+            <option value="ur_moveit.launch.py" />
+            <option value="lite6_moveit_fake.launch.py" />
+            <option value="lite6_moveit_realmove.launch.py" />
+        </param>
 
         <param type="text" name="robot_ip" default="192.168.1.101" 
                label="Robot IP" hint="Robot IP address" />
