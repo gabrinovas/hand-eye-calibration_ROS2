@@ -58,14 +58,13 @@
 
         <!-- 4. Robot IP Dropdown -->
         <param type="enum" name="robot_ip" default="192.168.1.101" 
-               label="Robot IP Dropdown" hint="Select registered IP address or select 'other' to specify a new IP below">
+               label="Robot IP" hint="Select registered IP address from dropdown menu">
             <option value="192.168.1.101" />
-            <option value="other" />
         </param>
 
-        <!-- 5. Custom Robot IP -->
-        <param type="text" name="custom_robot_ip" default="" 
-               label="New Robot IP (if 'other' selected)" hint="Type new IP address here if 'other' is selected in dropdown above. It will be registered into dropdown for future runs." />
+        <!-- 5. Register New IP Popup -->
+        <param type="boolean" name="register_new_ip_popup" default="False" 
+               label="Register New IP (Popup GUI)" hint="If checked, opens a GUI popup window at startup with Save and Exit buttons to register a new Robot IP into the manifest." />
 
         <!-- 6. Intrinsic Profile -->
         <param type="enum" name="camera_intrinsics_file" default="latest" 
@@ -82,36 +81,7 @@
         <param type="boolean" name="use_fake_hardware" default="False" 
                label="Use Fake Hardware" hint="True for simulation, False for real robot" />
 
-        <!-- 9. Base Frame -->
-        <param type="enum" name="base_frame" default="base" 
-               label="Base Frame" hint="Robot base frame (base for UR5e, link_base for ufactory_lite6)">
-            <option value="base" />
-            <option value="link_base" />
-        </param>
-
-        <!-- 10. Tool Frame -->
-        <param type="enum" name="tool_frame" default="tool0" 
-               label="Tool Frame" hint="End-effector frame (tool0 for UR5e, link_eef for ufactory_lite6)">
-            <option value="tool0" />
-            <option value="link_eef" />
-        </param>
-
-        <!-- 11. MoveIt Package -->
-        <param type="enum" name="moveit_config_package" default="ur_moveit_config" 
-               label="MoveIt Config Package" hint="Select MoveIt configuration package">
-            <option value="ur_moveit_config" />
-            <option value="xarm_moveit_config" />
-        </param>
-
-        <!-- 12. MoveIt Launch File -->
-        <param type="enum" name="moveit_launch_file" default="ur_moveit.launch.py" 
-               label="MoveIt Launch" hint="Select MoveIt launch file">
-            <option value="ur_moveit.launch.py" />
-            <option value="lite6_moveit_fake.launch.py" />
-            <option value="lite6_moveit_realmove.launch.py" />
-        </param>
-
-        <!-- 13. Calibration File Name -->
+        <!-- 9. Calibration File Name -->
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
                label="Calibration File" hint="Base name for calibration files (without extension)" />
 

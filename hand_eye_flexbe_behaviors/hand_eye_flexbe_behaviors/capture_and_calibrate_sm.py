@@ -8,6 +8,7 @@
 ###########################################################
 
 from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
+from hand_eye_flexbe_states.register_ip_popup import RegisterIPPopupState
 from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
@@ -45,18 +46,14 @@ class CaptureAndCalibrateSM(Behavior):
         # Behavior parameters
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense')
-        self.add_parameter('base_frame', 'base')
-        self.add_parameter('tool_frame', 'tool0')
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('camera_intrinsics_file', 'latest')
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # MoveIt parameters for UR5e
-        self.add_parameter('moveit_launch_file', 'ur_moveit.launch.py')
+        # Robot parameters
         self.add_parameter('robot_name', 'ur5e')
-        self.add_parameter('moveit_config_package', 'ur_moveit_config')
         self.add_parameter('robot_ip', '192.168.1.101')
-        self.add_parameter('custom_robot_ip', '')
+        self.add_parameter('register_new_ip_popup', False)
         self.add_parameter('use_fake_hardware', False)
         
         # UNIFIED PATHS - Dynamically resolved to user home per robot
@@ -67,6 +64,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('output_folder', base_calib_path)
 
         # Initialize states
+        RegisterIPPopupState.initialize_ros(node)
         LaunchMoveItState.initialize_ros(node)
         TakePoseAndPictureState.initialize_ros(node)
         OfflineFindCharucoState.initialize_ros(node)
@@ -81,14 +79,9 @@ class CaptureAndCalibrateSM(Behavior):
         # x:30 y:50, x:130 y:50
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
 
-        # Resolve dynamic/custom IP if 'other' or custom_robot_ip is provided
-        if self.robot_ip == 'other' or self.custom_robot_ip.strip():
-            if self.custom_robot_ip.strip():
-                self.robot_ip = self.custom_robot_ip.strip()
-        
-        # Register new IP in manifest enum options if not already present
+        # Register active IP in manifest enum options if not already present
         try:
-            if self.robot_ip and self.robot_ip != 'other':
+            if self.robot_ip:
                 from hand_eye_flexbe_behaviors.manifest_utils import register_robot_ip_in_manifest
                 register_robot_ip_in_manifest(self.robot_ip)
         except Exception:
@@ -126,6 +119,15 @@ class CaptureAndCalibrateSM(Behavior):
         # [/MANUAL_CREATE]
 
         with _state_machine:
+            # STATE 0: Register IP Popup (Optional)
+            OperatableStateMachine.add('Register_IP_Popup',
+                RegisterIPPopupState(
+                    register_new_ip_popup=self.register_new_ip_popup,
+                    robot_ip=self.robot_ip
+                ),
+                transitions={'done': 'Launch_MoveIt', 'failed': 'failed'},
+                autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
+
             # STATE 1: Launch MoveIt
             OperatableStateMachine.add('Launch_MoveIt',
                 LaunchMoveItState(
