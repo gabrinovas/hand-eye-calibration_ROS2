@@ -45,19 +45,19 @@
 
         <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
-               default="/home/aperta/calibrations/extrinsic_calibration/pictures" 
+               default="~/calibrations/extrinsic_calibration/pictures" 
                label="Pictures Folder" hint="Folder with images" readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
-               default="/home/aperta/calibrations/extrinsic_calibration/robot_poses" 
+               default="~/calibrations/extrinsic_calibration/robot_poses" 
                label="Robot Poses Folder" hint="Folder with poses" readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
-               default="/home/aperta/calibrations/extrinsic_calibration/charuco_table_poses" 
+               default="~/calibrations/extrinsic_calibration/charuco_table_poses" 
                label="Charuco Output Folder" hint="Folder for intermediate detections" readonly="true" />
 
         <param type="text" name="output_folder" 
-               default="/home/aperta/calibrations" 
+               default="~/calibrations" 
                label="Output Folder" hint="Base folder for results" readonly="true" />
     </params>
 
