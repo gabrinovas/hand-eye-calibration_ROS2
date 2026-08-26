@@ -32,7 +32,7 @@ class CharucoCameraCalibrationState(EventState):
         if images_folder:
             self.images_folder = images_folder
         else:
-            self.images_folder = os.path.expanduser('~/calibrations/camera_calib_pictures')
+            self.images_folder = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
         
         self.pic_folder = self.images_folder
         self.calibration_output_folder = os.path.expanduser('~/calibrations')
@@ -72,7 +72,7 @@ class CharucoCameraCalibrationState(EventState):
             }
         }
         
-        intrinsic_path = os.path.join(self.calibration_output_folder, 'intrinsic_matrix.yaml')
+        intrinsic_path = os.path.join(self.intrinsic_folder, 'intrinsic_matrix.yaml')
         with open(intrinsic_path, 'w') as f:
             yaml.dump(intrinsic_data, f, default_flow_style=None, width=float('inf'), sort_keys=False)
         
@@ -180,12 +180,7 @@ class CharucoCameraCalibrationState(EventState):
             timestamped_path = os.path.join(self.intrinsic_folder, f"camera_intrinsics_{date_str}.yaml")
             with open(timestamped_path, 'w') as f:
                 yaml.dump(calibration_data, f, default_flow_style=None, width=float('inf'))
-            Logger.loginfo(f"💾 Timestamped intrinsic calibration saved to: {timestamped_path}")
-            
-            # Save default YAML file (latest copy)
-            with open(self.final_output_path, 'w') as f:
-                yaml.dump(calibration_data, f, default_flow_style=None, width=float('inf'))
-            Logger.loginfo(f"💾 Default intrinsic calibration updated at: {self.final_output_path}")
+            Logger.loginfo(f"💾 Intrinsic calibration saved to: {timestamped_path}")
             
             # Save intrinsic matrix in specific format
             self.save_intrinsic_matrix_yaml(

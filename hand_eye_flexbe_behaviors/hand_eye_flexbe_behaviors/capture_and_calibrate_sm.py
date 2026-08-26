@@ -56,6 +56,7 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('moveit_config_package', 'ur_moveit_config')
         self.add_parameter('robot_ip', '192.168.1.101')
+        self.add_parameter('custom_robot_ip', '')
         self.add_parameter('use_fake_hardware', False)
         
         # UNIFIED PATHS - Dynamically resolved to user home per robot
@@ -77,27 +78,45 @@ class CaptureAndCalibrateSM(Behavior):
         # [/MANUAL_INIT]
 
     def create(self):
+        # x:30 y:50, x:130 y:50
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
+
+        # Resolve dynamic/custom IP if 'other' or custom_robot_ip is provided
+        if self.robot_ip == 'other' or self.custom_robot_ip.strip():
+            if self.custom_robot_ip.strip():
+                self.robot_ip = self.custom_robot_ip.strip()
         
-        # Normalize robot directory name and adjust defaults
-        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        # Register new IP in manifest enum options if not already present
+        try:
+            if self.robot_ip and self.robot_ip != 'other':
+                from hand_eye_flexbe_behaviors.manifest_utils import register_robot_ip_in_manifest
+                register_robot_ip_in_manifest(self.robot_ip)
+        except Exception:
+            pass
+
+        # Auto-configure robot-specific MoveIt, frame, and directory parameters based on robot_name
+        robot_lower = self.robot_name.lower()
+        if 'ur5e' in robot_lower or robot_lower == 'ur':
+            self.moveit_config_package = 'ur_moveit_config'
+            self.moveit_launch_file = 'ur_moveit.launch.py'
+            self.base_frame = 'base'
+            self.tool_frame = 'tool0'
+            robot_folder = 'ur5e'
+        elif 'lite6' in robot_lower or 'ufactory' in robot_lower:
+            self.moveit_config_package = 'xarm_moveit_config'
+            self.moveit_launch_file = 'lite6_moveit_fake.launch.py' if self.use_fake_hardware else 'lite6_moveit_realmove.launch.py'
+            self.base_frame = 'link_base'
+            self.tool_frame = 'link_eef'
+            robot_folder = 'ufactory_lite6'
+        else:
+            robot_folder = self.robot_name.lower().replace(' ', '_')
+
+        # Normalize directory paths per robot
         robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
-        
         self.output_folder = robot_calib_path
         self.pictures_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
         self.robot_poses_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
         self.charuco_output_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'charuco_table_poses')
-
-        # Auto-adjust default MoveIt and frame parameters if ufactory_lite6 is selected with default UR settings
-        if 'lite6' in self.robot_name.lower():
-            if self.moveit_config_package == 'ur_moveit_config':
-                self.moveit_config_package = 'xarm_moveit_config'
-            if self.moveit_launch_file == 'ur_moveit.launch.py':
-                self.moveit_launch_file = 'lite6_moveit_fake.launch.py' if self.use_fake_hardware else 'lite6_moveit_realmove.launch.py'
-            if self.base_frame == 'base':
-                self.base_frame = 'link_base'
-            if self.tool_frame == 'tool0':
-                self.tool_frame = 'link_eef'
         
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
