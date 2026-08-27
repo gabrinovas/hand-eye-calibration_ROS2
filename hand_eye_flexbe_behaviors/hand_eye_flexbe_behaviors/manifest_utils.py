@@ -1,42 +1,45 @@
 import os
+import sys
 import xml.etree.ElementTree as ET
 
 def get_all_manifest_paths():
     paths = set()
 
-    # 1. Relative path relative to this script location (works inside any workspace/docker structure)
+    # 1. Search relative to this script location
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    relative_manifest = os.path.abspath(os.path.join(script_dir, '..', 'manifest', 'capture_and_calibrate.xml'))
-    if os.path.exists(relative_manifest):
-        paths.add(relative_manifest)
+    curr = script_dir
+    for _ in range(5):
+        manifest_candidate = os.path.join(curr, 'manifest', 'capture_and_calibrate.xml')
+        if os.path.exists(manifest_candidate):
+            paths.add(os.path.abspath(manifest_candidate))
+        curr = os.path.dirname(curr)
 
-    # 2. Dynamic lookup via ROS 2 package indexing (ament_index)
-    try:
-        from ament_index_python.packages import get_package_prefix, get_package_share_directory
-        try:
-            prefix = get_package_prefix('hand_eye_flexbe_behaviors')
-            for root_dir, _, files in os.walk(prefix):
+    # 2. Search ROS 2 AMENT_PREFIX_PATH if set
+    ament_paths = os.environ.get('AMENT_PREFIX_PATH', '').split(os.path.pathsep)
+    for p in ament_paths:
+        if p and os.path.exists(p):
+            for root_dir, _, files in os.walk(p):
                 if 'capture_and_calibrate.xml' in files:
                     paths.add(os.path.join(root_dir, 'capture_and_calibrate.xml'))
-        except Exception:
-            pass
-        try:
-            share = get_package_share_directory('hand_eye_flexbe_behaviors')
-            for root_dir, _, files in os.walk(share):
+
+    # 3. Search common workspace roots (both src AND install)
+    search_roots = [
+        os.path.expanduser('~/static/aperta_ws'),
+        os.path.expanduser('~/APERTA'),
+        os.path.expanduser('~/aperta_ws'),
+    ]
+    for s_root in search_roots:
+        if os.path.exists(s_root):
+            for root_dir, _, files in os.walk(s_root):
                 if 'capture_and_calibrate.xml' in files:
                     paths.add(os.path.join(root_dir, 'capture_and_calibrate.xml'))
-        except Exception:
-            pass
-    except Exception:
-        pass
 
     return list(paths)
 
 def register_robot_ip_in_manifest(ip_address: str):
     """
     Appends a new IP address to the robot_ip enum parameter options in capture_and_calibrate.xml
-    without overwriting existing IPs across all discovered manifest locations.
-    Uses relative script paths and dynamic ROS 2 ament indexing.
+    without overwriting existing IPs across all discovered manifest locations (both src and install).
     """
     if not ip_address or ip_address in ["other", "otra", ""]:
         return
@@ -66,6 +69,5 @@ def register_robot_ip_in_manifest(ip_address: str):
             print(f"⚠️ Failed updating robot_ip in manifest {manifest_path}: {e}")
 
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) > 1:
         register_robot_ip_in_manifest(sys.argv[1])
