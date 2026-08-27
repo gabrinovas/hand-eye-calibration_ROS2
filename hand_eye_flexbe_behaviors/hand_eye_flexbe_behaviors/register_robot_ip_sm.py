@@ -46,10 +46,10 @@ class RegisterRobotIPSM(Behavior):
         # [/MANUAL_CREATE]
 
         with _state_machine:
-            # STATE 1: Register IP into manifest
+            # STATE 1: Register IP into manifest (evaluates self.new_robot_ip dynamically at runtime)
             OperatableStateMachine.add('Register_IP_State',
                 RegisterIPState(
-                    new_robot_ip=self.new_robot_ip
+                    get_ip=lambda: self.new_robot_ip
                 ),
                 transitions={'done': 'finished', 'failed': 'failed'},
                 autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
