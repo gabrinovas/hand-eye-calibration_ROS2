@@ -12,7 +12,7 @@ from hand_eye_flexbe_states.charuco_camera_calibration import CharucoCameraCalib
 from hand_eye_flexbe_states.take_picture import TakePictureState
 # Additional imports can be added inside the following tags
 # [MANUAL_IMPORT]
-
+import os
 # [/MANUAL_IMPORT]
 
 
