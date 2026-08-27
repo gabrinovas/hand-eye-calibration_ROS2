@@ -55,7 +55,7 @@
 			<option value="other" />
 		</param>
 
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (saved in ~/calibrations/<camera_type>/intrinsic_calibrations/)" />
+		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (saved in ~/calibrations/camera_type/intrinsic_calibrations/)" />
 
 		<param type="text" name="output_folder" default="~/calibrations/realsense_d435i/intrinsic_calibrations/camera_calib_pictures" label="Folder for images" hint="Folder to save images for intrinsic calibration" readonly="true" />
 

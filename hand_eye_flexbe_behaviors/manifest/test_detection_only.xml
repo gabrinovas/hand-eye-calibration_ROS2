@@ -47,7 +47,7 @@
                label="Eye-in-Hand" hint="True if camera on robot" />
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
-               label="Calibration File" hint="Output file name (saved in ~/calibrations/<camera_type>/<robot_name>/)" />
+               label="Calibration File" hint="Output file name (saved in ~/calibrations/camera_type/robot_name/)" />
 
         <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
