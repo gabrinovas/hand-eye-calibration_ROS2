@@ -40,8 +40,8 @@
         </param>
 
         
-        <param type="enum" name="camera_type" default="realsense" label="Camera Type" hint="Select camera driver (realsense or other)">
-            <option value="realsense" />
+        <param type="enum" name="camera_type" default="realsense_d435i" label="Camera Type" hint="Select camera driver (realsense_d435i or other)">
+            <option value="realsense_d435i" />
             <option value="other" />
         </param>
 
@@ -74,13 +74,13 @@
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" label="Calibration File" hint="Base name for calibration files (without extension)" />
 
         
-        <param type="text" name="output_folder" default="~/calibrations" label="Output Folder" hint="Root folder where results will be saved" readonly="true" />
+        <param type="text" name="output_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e" label="Output Folder" hint="Root folder where results will be saved per camera/robot" readonly="true" />
 
-        <param type="text" name="pictures_folder" default="~/calibrations/extrinsic_calibration/pictures" label="Pictures Folder" hint="Folder for images (created automatically)" readonly="true" />
+        <param type="text" name="pictures_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/pictures" label="Pictures Folder" hint="Folder for images (created automatically)" readonly="true" />
 
-        <param type="text" name="robot_poses_folder" default="~/calibrations/extrinsic_calibration/robot_poses" label="Robot Poses Folder" hint="Folder for robot poses (created automatically)" readonly="true" />
+        <param type="text" name="robot_poses_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/robot_poses" label="Robot Poses Folder" hint="Folder for robot poses (created automatically)" readonly="true" />
                
-        <param type="text" name="charuco_output_folder" default="~/calibrations/extrinsic_calibration/charuco_table_poses" label="Charuco Output Folder" hint="Folder for intermediate board detections" readonly="true" />
+        <param type="text" name="charuco_output_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/charuco_table_poses" label="Charuco Output Folder" hint="Folder for intermediate board detections" readonly="true" />
     </params>
 
 </behavior>

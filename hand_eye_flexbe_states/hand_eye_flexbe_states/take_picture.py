@@ -43,7 +43,7 @@ class TakePictureState(EventState):
         if output_folder:
             self.save_pwd = output_folder
         else:
-            self.save_pwd = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
+            self.save_pwd = os.path.expanduser(f'~/calibrations/{self.camera_type}/intrinsic_calibrations/camera_calib_pictures')
         
         # Create directory if it doesn't exist
         os.makedirs(self.save_pwd, exist_ok=True)
@@ -75,7 +75,7 @@ class TakePictureState(EventState):
     def _init_camera(self):
         """Initializes the camera based on its type"""
         try:
-            if self.camera_type == 'realsense':
+            if self.camera_type == 'realsense_d435i':
                 # Try different configurations
                 try:
                     self.pipeline = rs.pipeline()
@@ -134,7 +134,7 @@ class TakePictureState(EventState):
         
         try:
             # Get frame
-            if self.camera_type == 'realsense':
+            if self.camera_type == 'realsense_d435i':
                 try:
                     frames = self.pipeline.wait_for_frames(timeout_ms=5000)
                     color_frame = frames.get_color_frame()

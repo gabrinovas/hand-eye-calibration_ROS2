@@ -112,27 +112,30 @@ ros2 launch xarm_moveit_config lite6_moveit_fake.launch.py add_gripper:=true lau
 ros2 launch xarm_moveit_config lite6_moveit_realmove.launch.py robot_ip:=<IP_OF_THE_ROBOT> add_gripper:=true launch_rviz:=true
 ```
 
-## Dual Robot Support & Calibration Results Hierarchy
+## Multi-Camera & Multi-Robot Calibration Results Hierarchy
 
-This repository supports seamless switching between **Universal Robots UR5e** and **UFactory Lite 6**.
+This repository supports dynamic path resolution per camera model (e.g., `realsense_d435i`) and robot platform (**Universal Robots UR5e** and **UFactory Lite 6**).
 
 ### Folder Organization (`~/calibrations/`)
-- **Camera Intrinsics (`~/calibrations/intrinsic_calibrations/`)**:
+- **Camera Intrinsics (`~/calibrations/<camera_model>/intrinsic_calibrations/`)**:
   - Saved with exact timestamp labels: `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
-  - Active/latest intrinsic calibration is also mirrored at `~/calibrations/camera_intrinsics.yaml`.
-- **Extrinsic Calibrations per Robot**:
-  - **UR5e**: `~/calibrations/ur5e/` (`extrinsic_calibration/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
-  - **UFactory Lite 6**: `~/calibrations/ufactory_lite6/` (`extrinsic_calibration/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
-  - The latest computed extrinsics are synced to top-level `~/calibrations/` for root-level compatibility.
+  - Active/latest intrinsic calibration is mirrored at `~/calibrations/<camera_model>/camera_intrinsics.yaml`.
+- **Extrinsic Calibrations per Camera & Robot (`~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/`)**:
+  - **UR5e**: `~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/` (`pictures/`, `robot_poses/`, `charuco_table_poses/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
+  - **UFactory Lite 6**: `~/calibrations/realsense_d435i/extrinsic_calibration/ufactory_lite6/` (`pictures/`, `robot_poses/`, `charuco_table_poses/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
+  - The latest computed extrinsics are synced to the camera root folder (`~/calibrations/<camera_model>/`) for root-level compatibility.
+- **Robot Configuration Files (`~/calibrations/robot_calibration/<robot_name>/`)**:
+  - Contains platform config files such as `my_robot_calibration.yaml`.
 
 ### FlexBE Behavior Parameters (`capture_and_calibrate`)
+- **`camera_type`**: Set to `realsense_d435i` or custom camera identifier.
 - **`robot_name`**: Set to `ur5e` or `ufactory_lite6`.
   - **UR5e**: Uses `ur_moveit_config`, `ur_moveit.launch.py`, `base_frame` = `base`, `tool_frame` = `tool0`.
   - **UFactory Lite 6**: Uses `xarm_moveit_config`, `lite6_moveit_fake.launch.py` (sim) / `lite6_moveit_realmove.launch.py` (real), `base_frame` = `link_base`, `tool_frame` = `link_eef`.
-- **`camera_intrinsics_file`**: Set to `'latest'` to use the newest intrinsic file, or enter a specific timestamped filename from `~/calibrations/intrinsic_calibrations/` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
+- **`camera_intrinsics_file`**: Set to `'latest'` to use the newest intrinsic file, or enter a specific timestamped filename from `~/calibrations/<camera_model>/intrinsic_calibrations/`.
 - **`use_fake_hardware`**: `True` for simulation (fake controllers), `False` for real hardware.
 
 ---
 
 ## Result Files
-Results are exported per-robot under `~/calibrations/<robot_name>/` and synced to `~/calibrations/`.
+Results are exported per-robot under `~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/` and synced to `~/calibrations/<camera_model>/`.

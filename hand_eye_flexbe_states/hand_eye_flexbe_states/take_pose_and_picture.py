@@ -59,14 +59,14 @@ class TakePoseAndPictureState(EventState):
         else:
             self.tool_frame = tool_frame
         
-        # Configure folders per robot
+        # Configure folders per robot and camera
         base_path = os.path.expanduser('~/calibrations')
         robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
-        robot_calib_path = os.path.join(base_path, robot_folder)
+        robot_calib_path = os.path.join(base_path, self.camera_type, 'extrinsic_calibration', robot_folder)
         
-        self.output_folder = output_folder or os.path.join(robot_calib_path, 'extrinsic_calib_charuco_poses')
-        self.pictures_folder = pictures_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
-        self.robot_poses_folder = robot_poses_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
+        self.output_folder = output_folder or os.path.join(robot_calib_path, 'charuco_table_poses')
+        self.pictures_folder = pictures_folder or os.path.join(robot_calib_path, 'pictures')
+        self.robot_poses_folder = robot_poses_folder or os.path.join(robot_calib_path, 'robot_poses')
         
         # Create folders
         for folder in [self.pictures_folder, self.robot_poses_folder, self.output_folder]:
@@ -131,7 +131,7 @@ class TakePoseAndPictureState(EventState):
     def _init_camera(self):
         """Initializes the camera based on its type"""
         try:
-            if self.camera_type == 'realsense':
+            if self.camera_type == 'realsense_d435i':
                 self.pipeline = rs.pipeline()
                 config = rs.config()
                 config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
@@ -259,7 +259,7 @@ class TakePoseAndPictureState(EventState):
         
         try:
             # Get camera frame
-            if self.camera_type == 'realsense':
+            if self.camera_type == 'realsense_d435i':
                 frames = self.pipeline.wait_for_frames(timeout_ms=5000)
                 color_frame = frames.get_color_frame()
                 if not color_frame:

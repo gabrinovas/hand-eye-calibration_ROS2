@@ -23,7 +23,7 @@ class OfflineFindCharucoState(EventState):
     
     def __init__(self, pictures_folder=None, robot_poses_folder=None,
                  output_folder=None, eye_in_hand=False, robot_name='ur5e',
-                 camera_intrinsics_file='latest'):
+                 camera_intrinsics_file='latest', camera_type='realsense_d435i'):
         super().__init__(
             outcomes=['completed', 'failed'],
             output_keys=['base_h_tool_accumulated', 'camera_h_charuco_accumulated']
@@ -34,10 +34,11 @@ class OfflineFindCharucoState(EventState):
         self.eye_in_hand = eye_in_hand
         self.robot_name = robot_name
         self.camera_intrinsics_file = camera_intrinsics_file
+        self.camera_type = camera_type
         
         robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
-        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
-        self.output_folder = output_folder or os.path.join(robot_calib_path, 'extrinsic_calibration/charuco_table_poses')
+        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
+        self.output_folder = output_folder or os.path.join(robot_calib_path, 'charuco_table_poses')
         self.detections_file = os.path.join(robot_calib_path, 'charuco_detections.yaml')
         
         self.charuco_process = None
@@ -130,6 +131,7 @@ class OfflineFindCharucoState(EventState):
                 '-p', f'output_folder:={self.output_folder}',
                 '-p', f'eye_in_hand:={eye_in_hand_str}',
                 '-p', f'robot_name:={self.robot_name}',
+                '-p', f'camera_name:={self.camera_type}',
                 '-p', f'camera_intrinsics_file:={self.camera_intrinsics_file}',
                 '-p', 'publish_rate:=0.5',
                 '-p', 'save_results:=True'

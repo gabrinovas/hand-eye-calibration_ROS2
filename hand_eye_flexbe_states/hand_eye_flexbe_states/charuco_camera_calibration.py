@@ -17,7 +17,7 @@ class CharucoCameraCalibrationState(EventState):
     <= failed                                   Calibration error
     """
     
-    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None, robot_name='ur5e'):
+    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None, robot_name='ur5e', camera_type='realsense_d435i'):
         """Constructor"""
         super(CharucoCameraCalibrationState, self).__init__(outcomes=['done', 'failed'])
         
@@ -27,15 +27,16 @@ class CharucoCameraCalibrationState(EventState):
         self.row_count = row_count
         self.save_file_name = save_file_name
         self.robot_name = robot_name
+        self.camera_type = camera_type
         
         # Determine images folder
         if images_folder:
             self.images_folder = images_folder
         else:
-            self.images_folder = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
+            self.images_folder = os.path.expanduser(f'~/calibrations/{self.camera_type}/intrinsic_calibrations/camera_calib_pictures')
         
         self.pic_folder = self.images_folder
-        self.calibration_output_folder = os.path.expanduser('~/calibrations')
+        self.calibration_output_folder = os.path.expanduser(f'~/calibrations/{self.camera_type}')
         self.intrinsic_folder = os.path.join(self.calibration_output_folder, 'intrinsic_calibrations')
         os.makedirs(self.intrinsic_folder, exist_ok=True)
         self.final_output_path = os.path.join(self.calibration_output_folder, 'camera_intrinsics.yaml')

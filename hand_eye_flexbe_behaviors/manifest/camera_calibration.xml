@@ -50,14 +50,14 @@
 			<max value="20" />
 		</param>
 
-		<param type="enum" name="camera_type" default="realsense" label="Camera type" hint="Select camera driver">
-			<option value="realsense" />
+		<param type="enum" name="camera_type" default="realsense_d435i" label="Camera type" hint="Select camera driver">
+			<option value="realsense_d435i" />
 			<option value="other" />
 		</param>
 
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (saved in ~/calibrations/intrinsic_calibrations/)" />
+		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (saved in ~/calibrations/<camera_type>/intrinsic_calibrations/)" />
 
-		<param type="text" name="output_folder" default="~/calibrations/intrinsic_calibrations/camera_calib_pictures" label="Folder for images" hint="Folder to save images for intrinsic calibration" readonly="true" />
+		<param type="text" name="output_folder" default="~/calibrations/realsense_d435i/intrinsic_calibrations/camera_calib_pictures" label="Folder for images" hint="Folder to save images for intrinsic calibration" readonly="true" />
 
 	</params>
 

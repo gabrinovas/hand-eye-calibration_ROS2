@@ -30,6 +30,12 @@
 
     <!-- Available Parameters -->
     <params>
+        <param type="enum" name="camera_type" default="realsense_d435i"
+               label="Camera Type" hint="Select camera model (realsense_d435i or other) to resolve calibration folder">
+            <option value="realsense_d435i" />
+            <option value="other" />
+        </param>
+
         <param type="enum" name="robot_name" default="ur5e" 
                label="Robot Name" hint="Select robot model (ur5e, ufactory_lite6, or other) to resolve calibration folder">
             <option value="ur5e" />
@@ -41,23 +47,23 @@
                label="Eye-in-Hand" hint="True if camera on robot" />
 
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" 
-               label="Calibration File" hint="Output file name (saved in ~/calibrations/robot_name/)" />
+               label="Calibration File" hint="Output file name (saved in ~/calibrations/<camera_type>/<robot_name>/)" />
 
         <!-- PATHS (read-only) -->
         <param type="text" name="pictures_folder" 
-               default="~/calibrations/extrinsic_calibration/pictures" 
+               default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/pictures" 
                label="Pictures Folder" hint="Folder with images" readonly="true" />
 
         <param type="text" name="robot_poses_folder" 
-               default="~/calibrations/extrinsic_calibration/robot_poses" 
+               default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/robot_poses" 
                label="Robot Poses Folder" hint="Folder with poses" readonly="true" />
                
         <param type="text" name="charuco_output_folder" 
-               default="~/calibrations/extrinsic_calibration/charuco_table_poses" 
+               default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/charuco_table_poses" 
                label="Charuco Output Folder" hint="Folder for intermediate detections" readonly="true" />
 
         <param type="text" name="output_folder" 
-               default="~/calibrations" 
+               default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e" 
                label="Output Folder" hint="Base folder for results" readonly="true" />
     </params>
 
