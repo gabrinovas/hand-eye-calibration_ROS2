@@ -39,7 +39,7 @@ class OfflineFindCharucoState(EventState):
         robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
         robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
         self.output_folder = output_folder or os.path.join(robot_calib_path, 'charuco_table_poses')
-        self.detections_file = os.path.join(robot_calib_path, 'charuco_detections.yaml')
+        self.detections_file = os.path.join(self.output_folder, 'charuco_detections.yaml')
         
         self.charuco_process = None
         self.base_h_tool_accumulated = None

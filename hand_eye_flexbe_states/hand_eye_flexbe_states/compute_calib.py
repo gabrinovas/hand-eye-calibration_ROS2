@@ -74,11 +74,11 @@ class ComputeCalibState(EventState):
         self.ini_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.ini")
         self.yaml_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.yaml")
         
-        # Main output file
-        self.main_output_file = os.path.join(self.output_folder, 'camera_extrinsics.yaml')
+        # Main output file inside calibration_results folder
+        self.main_output_file = os.path.join(self.calib_results_folder, 'camera_extrinsics.yaml')
         
         # Duplicate detections file to delete
-        self.temp_detections_file = os.path.join(self.output_folder, 'charuco_detections.yaml')
+        self.temp_detections_file = os.path.join(self.output_folder, 'charuco_table_poses', 'charuco_detections.yaml')
         
         # Config parser for INI
         self.config = configparser.ConfigParser()
@@ -333,14 +333,17 @@ class ComputeCalibState(EventState):
     
     def _cleanup_temp_files(self):
         """Deletes temporary files after calibration"""
-        try:
-            if os.path.exists(self.temp_detections_file):
-                os.remove(self.temp_detections_file)
-                Logger.loginfo(f"🧹 Temporary file removed: {self.temp_detections_file}")
-            else:
-                Logger.loginfo(f"📂 Temporary file not found (already removed): {self.temp_detections_file}")
-        except Exception as e:
-            Logger.logwarn(f"⚠️ Could not delete temporary file {self.temp_detections_file}: {e}")
+        temp_files = [
+            self.temp_detections_file,
+            os.path.join(self.output_folder, 'charuco_detections.yaml')
+        ]
+        for fpath in temp_files:
+            try:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+                    Logger.loginfo(f"🧹 Temporary file removed: {fpath}")
+            except Exception as e:
+                Logger.logwarn(f"⚠️ Could not delete temporary file {fpath}: {e}")
     
     def _save_calibration(self, transform, num_poses):
         """Saves the calibration in INI, YAML format and main file"""
@@ -443,8 +446,8 @@ class ComputeCalibState(EventState):
                 yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
             Logger.loginfo(f"💾 Synced calibration to camera root file: {top_main}")
         
-        # ===== Save extrinsic_matrix.yaml with specific format =====
-        extrinsic_file = os.path.join(self.output_folder, 'extrinsic_matrix.yaml')
+        # ===== Save extrinsic_matrix.yaml in calibration_results folder =====
+        extrinsic_file = os.path.join(self.calib_results_folder, 'extrinsic_matrix.yaml')
         
         # T is the transformation matrix returned by ViSP (eMc or bMc).
         # Transforms points from the camera frame to the parent frame (effector or base).
