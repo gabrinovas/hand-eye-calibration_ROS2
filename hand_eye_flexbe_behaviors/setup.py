@@ -33,6 +33,7 @@ setup(
             'camera_calibration_sm = hand_eye_flexbe_behaviors.camera_calibration_sm',
             'capture_and_calibrate_sm = hand_eye_flexbe_behaviors.capture_and_calibrate_sm',
             'test_detection_only_sm = hand_eye_flexbe_behaviors.test_detection_only_sm',
+            'register_robot_ip_sm = hand_eye_flexbe_behaviors.register_robot_ip_sm',
         ],
     },
 )

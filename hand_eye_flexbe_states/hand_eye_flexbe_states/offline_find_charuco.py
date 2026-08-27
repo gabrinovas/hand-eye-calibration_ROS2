@@ -196,7 +196,7 @@ class OfflineFindCharucoState(EventState):
             
             world_effector_msg.header = Header()
             world_effector_msg.header.stamp = self._node.get_clock().now().to_msg()
-            world_effector_msg.header.frame_id = 'base'
+            world_effector_msg.header.frame_id = self.base_frame
             
             camera_object_msg.header = Header()
             camera_object_msg.header.stamp = self._node.get_clock().now().to_msg()
