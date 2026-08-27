@@ -431,13 +431,17 @@ class ComputeCalibState(EventState):
         
         Logger.loginfo(f"💾 Calibration saved in main file: {self.main_output_file}")
         
-        # Also sync to top-level ~/calibrations/camera_extrinsics.yaml
-        top_calib_folder = os.path.expanduser('~/calibrations')
-        if os.path.abspath(self.output_folder) != os.path.abspath(top_calib_folder):
-            top_main = os.path.join(top_calib_folder, 'camera_extrinsics.yaml')
+        # Also sync to camera root folder (e.g. ~/calibrations/<camera_name>/camera_extrinsics.yaml)
+        if 'extrinsic_calibration' in self.output_folder:
+            camera_calib_folder = self.output_folder.split('extrinsic_calibration')[0].rstrip('/')
+        else:
+            camera_calib_folder = os.path.dirname(os.path.abspath(self.output_folder))
+        
+        if os.path.exists(camera_calib_folder):
+            top_main = os.path.join(camera_calib_folder, 'camera_extrinsics.yaml')
             with open(top_main, 'w') as f:
                 yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
-            Logger.loginfo(f"💾 Synced calibration to root file: {top_main}")
+            Logger.loginfo(f"💾 Synced calibration to camera root file: {top_main}")
         
         # ===== Save extrinsic_matrix.yaml with specific format =====
         extrinsic_file = os.path.join(self.output_folder, 'extrinsic_matrix.yaml')
@@ -472,11 +476,11 @@ class ComputeCalibState(EventState):
         
         Logger.loginfo(f"💾 Extrinsic matrix saved in: {extrinsic_file}")
         
-        if os.path.abspath(self.output_folder) != os.path.abspath(top_calib_folder):
-            top_extrinsic = os.path.join(top_calib_folder, 'extrinsic_matrix.yaml')
+        if os.path.exists(camera_calib_folder):
+            top_extrinsic = os.path.join(camera_calib_folder, 'extrinsic_matrix.yaml')
             with open(top_extrinsic, 'w') as f:
                 yaml.dump(extrinsic_data, f, default_flow_style=None, sort_keys=False, indent=2)
-            Logger.loginfo(f"💾 Synced extrinsic matrix to root file: {top_extrinsic}")
+            Logger.loginfo(f"💾 Synced extrinsic matrix to camera root file: {top_extrinsic}")
     
     def on_stop(self):
         """Clean up VISP process on finish"""

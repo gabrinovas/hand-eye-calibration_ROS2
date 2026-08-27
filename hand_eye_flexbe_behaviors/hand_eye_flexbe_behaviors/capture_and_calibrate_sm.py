@@ -44,7 +44,7 @@ class CaptureAndCalibrateSM(Behavior):
 
         # Behavior parameters
         self.add_parameter('total_poses', 20)
-        self.add_parameter('camera_type', 'realsense')
+        self.add_parameter('camera_type', 'realsense_d435i')
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('camera_intrinsics_file', 'latest')
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
@@ -55,10 +55,10 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('use_fake_hardware', False)
         
         # UNIFIED PATHS - Dynamically resolved to user home per robot
-        base_calib_path = os.path.expanduser('~/calibrations')
-        self.add_parameter('pictures_folder', f'{base_calib_path}/extrinsic_calibration/pictures')
-        self.add_parameter('robot_poses_folder', f'{base_calib_path}/extrinsic_calibration/robot_poses')
-        self.add_parameter('charuco_output_folder', f'{base_calib_path}/extrinsic_calibration/charuco_table_poses')
+        base_calib_path = os.path.expanduser('~/calibrations/realsense_d435i/extrinsic_calibration/ur5e')
+        self.add_parameter('pictures_folder', f'{base_calib_path}/pictures')
+        self.add_parameter('robot_poses_folder', f'{base_calib_path}/robot_poses')
+        self.add_parameter('charuco_output_folder', f'{base_calib_path}/charuco_table_poses')
         self.add_parameter('output_folder', base_calib_path)
 
         # Initialize states
@@ -101,12 +101,12 @@ class CaptureAndCalibrateSM(Behavior):
         else:
             robot_folder = self.robot_name.lower().replace(' ', '_')
 
-        # Normalize directory paths per robot
-        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
+        # Normalize directory paths per camera and robot
+        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
         self.output_folder = robot_calib_path
-        self.pictures_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
-        self.robot_poses_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
-        self.charuco_output_folder = os.path.join(robot_calib_path, 'extrinsic_calibration', 'charuco_table_poses')
+        self.pictures_folder = os.path.join(robot_calib_path, 'pictures')
+        self.robot_poses_folder = os.path.join(robot_calib_path, 'robot_poses')
+        self.charuco_output_folder = os.path.join(robot_calib_path, 'charuco_table_poses')
         
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
@@ -151,7 +151,8 @@ class CaptureAndCalibrateSM(Behavior):
                     output_folder=self.charuco_output_folder,
                     eye_in_hand=self.eye_in_hand,
                     robot_name=self.robot_name,
-                    camera_intrinsics_file=self.camera_intrinsics_file
+                    camera_intrinsics_file=self.camera_intrinsics_file,
+                    camera_type=self.camera_type
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
                 autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},

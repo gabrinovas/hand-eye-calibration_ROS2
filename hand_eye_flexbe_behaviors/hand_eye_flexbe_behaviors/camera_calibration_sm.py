@@ -46,10 +46,10 @@ class camera_calibrationSM(Behavior):
         self.add_parameter('marker_size', 0.0150)
         self.add_parameter('col_count', 10)
         self.add_parameter('row_count', 14)
-        self.add_parameter('camera_type', 'realsense')
+        self.add_parameter('camera_type', 'realsense_d435i')
         self.add_parameter('save_file_name', 'camera_intrinsics.yaml')
         
-        base_intrinsic_path = os.path.expanduser('~/calibrations/intrinsic_calibrations')
+        base_intrinsic_path = os.path.expanduser('~/calibrations/realsense_d435i/intrinsic_calibrations')
         self.add_parameter('output_folder', os.path.join(base_intrinsic_path, 'camera_calib_pictures'))
 
         # references to used behaviors
@@ -68,7 +68,7 @@ class camera_calibrationSM(Behavior):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
 
         if not self.output_folder:
-            self.output_folder = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
+            self.output_folder = os.path.expanduser(f'~/calibrations/{self.camera_type}/intrinsic_calibrations/camera_calib_pictures')
 
         # Additional creation code can be added inside the following tags
         # [MANUAL_CREATE]
@@ -92,7 +92,8 @@ class camera_calibrationSM(Behavior):
                                                                      col_count=self.col_count, 
                                                                      row_count=self.row_count, 
                                                                      save_file_name=self.save_file_name,
-                                                                     images_folder=self.output_folder),
+                                                                     images_folder=self.output_folder,
+                                                                     camera_type=self.camera_type),
                                         transitions={'done': 'finished', 'failed': 'failed'},
                                         autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
