@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<behavior name="Register Robot IP">
+
+    <executable package_path="hand_eye_flexbe_behaviors.register_robot_ip_sm" class="RegisterRobotIPSM" />
+    <tagstring>v1.0</tagstring>
+    <author>Gabriel Novas</author>
+    <date>2026-03-05</date>
+    <description>
+        Utility Behavior to register a new Robot IP address into the FlexBE manifest.
+        
+        FLOW:
+        1. Type the new Robot IP in the parameter field.
+        2. Click Start Execution.
+        3. The IP is registered permanently into capture_and_calibrate.xml.
+    </description>
+
+    <!-- Available Parameters -->
+    <params>
+        <param type="text" name="new_robot_ip" default="192.168.1.101" 
+               label="New Robot IP" hint="Type the new IP address to register into the dropdown menu (e.g. 192.168.1.120)" />
+    </params>
+
+</behavior>

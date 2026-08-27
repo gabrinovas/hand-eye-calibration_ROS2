@@ -53,19 +53,33 @@ class LaunchMoveItState(EventState):
                 return
             
             Logger.loginfo("="*60)
-            Logger.loginfo("🚀 Launching MoveIt for UR5e...")
+            Logger.loginfo(f"🚀 Launching MoveIt for {self.robot_name}...")
             Logger.loginfo("="*60)
             
-            # Simplified command
+            # Construct launch command based on robot type
             cmd = [
                 'ros2', 'launch',
                 self.moveit_config_package,
-                self.moveit_launch_file,
-                f'ur_type:={self.robot_name}',
-                f'robot_ip:={self.robot_ip}',
-                f'use_fake_hardware:={str(self.use_fake_hardware).lower()}',
-                'launch_rviz:=true'
+                self.moveit_launch_file
             ]
+            
+            if 'lite6' in self.robot_name.lower() or 'xarm' in self.moveit_config_package.lower():
+                # UFactory Lite 6 / xArm MoveIt launch parameters
+                cmd.extend([
+                    f'robot_ip:={self.robot_ip}',
+                    'add_gripper:=true',
+                    'launch_rviz:=true'
+                ])
+                if self.moveit_launch_file.startswith('xarm'):
+                    cmd.append('robot_type:=lite6')
+            else:
+                # UR MoveIt launch parameters (UR5e, UR10, etc.)
+                cmd.extend([
+                    f'ur_type:={self.robot_name}',
+                    f'robot_ip:={self.robot_ip}',
+                    f'use_fake_hardware:={str(self.use_fake_hardware).lower()}',
+                    'launch_rviz:=true'
+                ])
             
             Logger.loginfo(f"📋 Command: {' '.join(cmd)}")
             

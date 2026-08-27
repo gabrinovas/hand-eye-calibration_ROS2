@@ -17,7 +17,7 @@ class CharucoCameraCalibrationState(EventState):
     <= failed                                   Calibration error
     """
     
-    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None):
+    def __init__(self, square_size, marker_size, col_count, row_count, save_file_name, images_folder=None, robot_name='ur5e'):
         """Constructor"""
         super(CharucoCameraCalibrationState, self).__init__(outcomes=['done', 'failed'])
         
@@ -26,15 +26,18 @@ class CharucoCameraCalibrationState(EventState):
         self.col_count = col_count
         self.row_count = row_count
         self.save_file_name = save_file_name
+        self.robot_name = robot_name
         
         # Determine images folder
         if images_folder:
             self.images_folder = images_folder
         else:
-            self.images_folder = os.path.expanduser('~/calibrations/camera_calib_pictures')
+            self.images_folder = os.path.expanduser('~/calibrations/intrinsic_calibrations/camera_calib_pictures')
         
         self.pic_folder = self.images_folder
         self.calibration_output_folder = os.path.expanduser('~/calibrations')
+        self.intrinsic_folder = os.path.join(self.calibration_output_folder, 'intrinsic_calibrations')
+        os.makedirs(self.intrinsic_folder, exist_ok=True)
         self.final_output_path = os.path.join(self.calibration_output_folder, 'camera_intrinsics.yaml')
         
         # OpenCV 4.5.4 API (the one that works with Charuco)
@@ -69,7 +72,7 @@ class CharucoCameraCalibrationState(EventState):
             }
         }
         
-        intrinsic_path = os.path.join(self.calibration_output_folder, 'intrinsic_matrix.yaml')
+        intrinsic_path = os.path.join(self.intrinsic_folder, 'intrinsic_matrix.yaml')
         with open(intrinsic_path, 'w') as f:
             yaml.dump(intrinsic_data, f, default_flow_style=None, width=float('inf'), sort_keys=False)
         
@@ -148,13 +151,18 @@ class CharucoCameraCalibrationState(EventState):
             Logger.loginfo(f"\n📐 Distortion coefficients:\n{dist_coeffs.reshape(-1)}")
             
             # Save standard calibration
+            now = time.time()
+            date_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(now))
+            readable_date = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+            
             calibration_data = {
                 'camera_matrix': camera_matrix.tolist(),
                 'distortion_coefficients': dist_coeffs.reshape(-1).tolist(),
                 'image_width': image_size[0],
                 'image_height': image_size[1],
                 'reprojection_error': float(ret),
-                'calibration_date': time.time(),
+                'calibration_date': readable_date,
+                'timestamp': float(now),
                 'charuco_config': {
                     'rows': self.row_count,
                     'cols': self.col_count,
@@ -164,14 +172,15 @@ class CharucoCameraCalibrationState(EventState):
                 }
             }
             
-            # Ensure folder exists
+            # Ensure folders exist
             os.makedirs(self.calibration_output_folder, exist_ok=True)
+            os.makedirs(self.intrinsic_folder, exist_ok=True)
             
-            # Save standard YAML file
-            with open(self.final_output_path, 'w') as f:
+            # Save timestamped YAML file
+            timestamped_path = os.path.join(self.intrinsic_folder, f"camera_intrinsics_{date_str}.yaml")
+            with open(timestamped_path, 'w') as f:
                 yaml.dump(calibration_data, f, default_flow_style=None, width=float('inf'))
-            
-            Logger.loginfo(f"💾 Standard calibration saved to: {self.final_output_path}")
+            Logger.loginfo(f"💾 Intrinsic calibration saved to: {timestamped_path}")
             
             # Save intrinsic matrix in specific format
             self.save_intrinsic_matrix_yaml(
@@ -179,9 +188,12 @@ class CharucoCameraCalibrationState(EventState):
                 dist_coeffs=dist_coeffs,
                 image_size=image_size,
                 robot_id=1,
-                robot_name="ur5e",
+                robot_name=self.robot_name,
                 robot_ip="192.168.1.101"
             )
+            
+            # Update manifest dropdown options
+            self.update_manifest_intrinsic_options()
             
             return "done"
             
@@ -190,6 +202,54 @@ class CharucoCameraCalibrationState(EventState):
             import traceback
             traceback.print_exc()
             return "failed"
+            
+    def update_manifest_intrinsic_options(self):
+        """Dynamically populates option entries in capture_and_calibrate.xml for intrinsic files"""
+        try:
+            import glob
+            import xml.etree.ElementTree as ET
+            from ament_index_python.packages import get_package_share_directory
+            
+            intrinsic_files = sorted([os.path.basename(f) for f in glob.glob(os.path.join(self.intrinsic_folder, 'camera_intrinsics_*.yaml'))])
+            
+            possible_manifest_paths = []
+            try:
+                share_dir = get_package_share_directory('hand_eye_flexbe_behaviors')
+                possible_manifest_paths.append(os.path.join(share_dir, 'manifest', 'capture_and_calibrate.xml'))
+            except:
+                pass
+                
+            repo_manifest = os.path.expanduser('~/APERTA/APERTA-Repos/camera-calibration/hand-eye-calibration_ROS2/hand_eye_flexbe_behaviors/manifest/capture_and_calibrate.xml')
+            if os.path.exists(repo_manifest):
+                possible_manifest_paths.append(repo_manifest)
+                
+            for manifest_path in possible_manifest_paths:
+                if not os.path.exists(manifest_path):
+                    continue
+                tree = ET.parse(manifest_path)
+                root = tree.getroot()
+                params = root.find('params')
+                if params is None:
+                    continue
+                for param in params.findall('param'):
+                    if param.get('name') == 'camera_intrinsics_file':
+                        param.set('type', 'enum')
+                        # Remove existing options
+                        for opt in list(param.findall('option')):
+                            param.remove(opt)
+                        # Add latest
+                        opt_latest = ET.Element('option')
+                        opt_latest.set('value', 'latest')
+                        param.append(opt_latest)
+                        # Add all timestamped files
+                        for filename in intrinsic_files:
+                            opt_file = ET.Element('option')
+                            opt_file.set('value', filename)
+                            param.append(opt_file)
+                tree.write(manifest_path, encoding='UTF-8', xml_declaration=True)
+                Logger.loginfo(f"🔄 Updated manifest options in {manifest_path}")
+        except Exception as e:
+            Logger.logwarn(f"⚠️ Could not update manifest intrinsic options: {e}")
     
     def on_exit(self, userdata):
         """Clean up on exit"""

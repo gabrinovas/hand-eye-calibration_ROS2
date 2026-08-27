@@ -25,7 +25,7 @@ class TakePoseAndPictureState(EventState):
     
     -- total_poses       int     TOTAL number of poses to capture
     -- camera_type       str     'realsense' or 'usb'
-    -- base_frame        str     Robot base frame (base_link)
+    -- base_frame        str     Robot base frame (base)
     -- tool_frame        str     End-effector frame (tool0)
     -- pictures_folder   str     Folder for images
     -- robot_poses_folder str    Folder for poses
@@ -36,23 +36,37 @@ class TakePoseAndPictureState(EventState):
     <= failed                   Error
     """
     
-    def __init__(self, total_poses, camera_type, base_frame='base_link', 
-                 tool_frame='tool0', pictures_folder=None, robot_poses_folder=None,
+    def __init__(self, total_poses, camera_type, robot_name='ur5e',
+                 base_frame=None, tool_frame=None,
+                 pictures_folder=None, robot_poses_folder=None,
                  output_folder=None, auto_capture=False):
         super().__init__(outcomes=['done', 'failed'])
         
         self.total_poses = total_poses
         self.camera_type = camera_type
-        self.base_frame = base_frame
-        self.tool_frame = tool_frame
+        self.robot_name = robot_name
         self.auto_capture = auto_capture
         self.poses_taken = 0
         
-        # Configure folders
+        # Frame defaults based on robot_name if not specified
+        if base_frame is None or base_frame == 'base':
+            self.base_frame = 'link_base' if 'lite6' in self.robot_name.lower() else 'base'
+        else:
+            self.base_frame = base_frame
+            
+        if tool_frame is None or tool_frame == 'tool0':
+            self.tool_frame = 'link_eef' if 'lite6' in self.robot_name.lower() else 'tool0'
+        else:
+            self.tool_frame = tool_frame
+        
+        # Configure folders per robot
         base_path = os.path.expanduser('~/calibrations')
-        self.output_folder = output_folder or os.path.join(base_path, 'extrinsic_calib_charuco_poses')
-        self.pictures_folder = pictures_folder or os.path.join(base_path, 'extrinsic_calibration', 'pictures')
-        self.robot_poses_folder = robot_poses_folder or os.path.join(base_path, 'extrinsic_calibration', 'robot_poses')
+        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        robot_calib_path = os.path.join(base_path, robot_folder)
+        
+        self.output_folder = output_folder or os.path.join(robot_calib_path, 'extrinsic_calib_charuco_poses')
+        self.pictures_folder = pictures_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'pictures')
+        self.robot_poses_folder = robot_poses_folder or os.path.join(robot_calib_path, 'extrinsic_calibration', 'robot_poses')
         
         # Create folders
         for folder in [self.pictures_folder, self.robot_poses_folder, self.output_folder]:
@@ -63,7 +77,7 @@ class TakePoseAndPictureState(EventState):
         self.capture = None
         self.color_image = None
         self.window_created = False
-        self.window_name = 'UR5e CALIBRATION - Pose capture'
+        self.window_name = f'{self.robot_name.upper()} CALIBRATION - Pose capture'
         self.camera_initialized = False
         self.should_exit = False
         
@@ -72,7 +86,7 @@ class TakePoseAndPictureState(EventState):
         self.tf_listener = None
         
         Logger.loginfo("="*60)
-        Logger.loginfo("📸 STATE: TakePoseAndPicture (UR5e)")
+        Logger.loginfo(f"📸 STATE: TakePoseAndPicture ({self.robot_name})")
         Logger.loginfo("="*60)
         Logger.loginfo(f"🎯 Target: {self.total_poses} poses")
         Logger.loginfo(f"📁 Images: {self.pictures_folder}")
@@ -274,7 +288,7 @@ class TakePoseAndPictureState(EventState):
             cv2.addWeighted(overlay, 0.6, display, 0.4, 0, display)
             
             # Informative text
-            cv2.putText(display, f"🤖 UR5e - EXTRINSIC CALIBRATION", 
+            cv2.putText(display, f"🤖 {self.robot_name.upper()} - EXTRINSIC CALIBRATION", 
                        (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2)
             cv2.putText(display, f"📸 CAPTURED: {self.poses_taken}/{self.total_poses}", 
                        (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)

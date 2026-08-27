@@ -21,7 +21,9 @@ class OfflineFindCharucoState(EventState):
     Starts the Charuco detection node and waits for it to publish.
     """
     
-    def __init__(self, pictures_folder, robot_poses_folder, output_folder=None, eye_in_hand=False):
+    def __init__(self, pictures_folder=None, robot_poses_folder=None,
+                 output_folder=None, eye_in_hand=False, robot_name='ur5e',
+                 camera_intrinsics_file='latest'):
         super().__init__(
             outcomes=['completed', 'failed'],
             output_keys=['base_h_tool_accumulated', 'camera_h_charuco_accumulated']
@@ -29,8 +31,14 @@ class OfflineFindCharucoState(EventState):
         
         self.pictures_folder = pictures_folder
         self.robot_poses_folder = robot_poses_folder
-        self.output_folder = output_folder or os.path.expanduser('~/calibrations/extrinsic_calibration/charuco_table_poses')
         self.eye_in_hand = eye_in_hand
+        self.robot_name = robot_name
+        self.camera_intrinsics_file = camera_intrinsics_file
+        
+        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
+        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), robot_folder)
+        self.output_folder = output_folder or os.path.join(robot_calib_path, 'extrinsic_calibration/charuco_table_poses')
+        self.detections_file = os.path.join(robot_calib_path, 'charuco_detections.yaml')
         
         self.charuco_process = None
         self.base_h_tool_accumulated = None
@@ -63,18 +71,19 @@ class OfflineFindCharucoState(EventState):
         self.base_h_tool_accumulated = TransformArray()
         self.camera_h_charuco_accumulated = TransformArray()
         
+        base_frame = 'link_base' if 'lite6' in self.robot_name.lower() else 'base'
+        
         self.base_h_tool_accumulated.header = Header()
         self.base_h_tool_accumulated.header.stamp = self._node.get_clock().now().to_msg()
-        self.base_h_tool_accumulated.header.frame_id = 'base_link'
+        self.base_h_tool_accumulated.header.frame_id = base_frame
         
         self.camera_h_charuco_accumulated.header = Header()
         self.camera_h_charuco_accumulated.header.stamp = self._node.get_clock().now().to_msg()
         self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
         
         # Check if there are already saved detections
-        detections_file = os.path.expanduser('~/calibrations/charuco_detections.yaml')
-        if os.path.exists(detections_file):
-            Logger.loginfo("📂 Loading detections from existing file...")
+        if os.path.exists(self.detections_file):
+            Logger.loginfo(f"📂 Loading detections from existing file: {self.detections_file}")
             if self._load_from_file():
                 Logger.loginfo("✅ Detections loaded from file")
                 self.received_data = True
@@ -120,7 +129,8 @@ class OfflineFindCharucoState(EventState):
                 '-p', f'robot_poses_folder:={self.robot_poses_folder}',
                 '-p', f'output_folder:={self.output_folder}',
                 '-p', f'eye_in_hand:={eye_in_hand_str}',
-                '-p', f'camera_intrinsics_file:={os.path.expanduser("~/calibrations/camera_intrinsics.yaml")}',
+                '-p', f'robot_name:={self.robot_name}',
+                '-p', f'camera_intrinsics_file:={self.camera_intrinsics_file}',
                 '-p', 'publish_rate:=0.5',
                 '-p', 'save_results:=True'
             ]
@@ -167,7 +177,7 @@ class OfflineFindCharucoState(EventState):
     def _load_from_file(self):
         """Loads detections from YAML file"""
         try:
-            detections_file = os.path.expanduser('~/calibrations/charuco_detections.yaml')
+            detections_file = self.detections_file
             
             if not os.path.exists(detections_file):
                 return False
@@ -184,7 +194,7 @@ class OfflineFindCharucoState(EventState):
             
             world_effector_msg.header = Header()
             world_effector_msg.header.stamp = self._node.get_clock().now().to_msg()
-            world_effector_msg.header.frame_id = 'base_link'
+            world_effector_msg.header.frame_id = 'base'
             
             camera_object_msg.header = Header()
             camera_object_msg.header.stamp = self._node.get_clock().now().to_msg()
