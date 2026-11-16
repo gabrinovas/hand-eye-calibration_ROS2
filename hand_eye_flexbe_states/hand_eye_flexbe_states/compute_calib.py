@@ -28,7 +28,10 @@ class ComputeCalibState(EventState):
     -- calibration_file_name string   Output file name
     -- customize_file        bool     Use custom name
     -- launch_visp           bool     Launch VISP automatically
-    -- output_folder         string   Output folder
+    -- output_folder         string   Folder of the camera, robot and cell (calibration_layout)
+    -- cell                  string   Cell the calibration belongs to (written in the result)
+    -- base_frame            string   Robot frame the result is expressed in (written in the result)
+    -- camera_frame          string   Camera frame of the result (written in the result)
     
     ># base_h_tool           TransformArray  Robot poses (base→tool)
     ># camera_h_charuco      TransformArray  Board poses (camera→charuco)
@@ -39,7 +42,7 @@ class ComputeCalibState(EventState):
     
     def __init__(self, eye_in_hand_mode, calibration_file_name, 
                  robot_name='ur5e', customize_file=False,
-                 launch_visp=True, output_folder=None):
+                 launch_visp=True, output_folder=None, cell=None, base_frame=None, camera_frame=None):
         super().__init__(
             outcomes=['finish', 'failed'],
             input_keys=['base_h_tool', 'camera_h_charuco']
@@ -47,13 +50,18 @@ class ComputeCalibState(EventState):
         
         self.eye_in_hand_mode = eye_in_hand_mode
         self.robot_name = robot_name
+        # A result says what it is the calibration of: robot, cell and frames. The programs that use it check them.
+        if not output_folder or not cell or not base_frame or not camera_frame:
+            raise ValueError("ComputeCalibState needs output_folder, cell, base_frame and camera_frame "
+                             "(charuco_calibrator.calibration_layout)")
+        self.cell, self.base_frame, self.camera_frame = str(cell), str(base_frame), str(camera_frame)
         self.launch_visp = launch_visp
         self.visp_process = None
         self.calib_client = None
         self._service_ready = False
         
         # Configure output folders
-        self.output_folder = output_folder or os.path.expanduser('~/calibrations')
+        self.output_folder = output_folder
         self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
         os.makedirs(self.calib_results_folder, exist_ok=True)
         
@@ -367,6 +375,9 @@ class ComputeCalibState(EventState):
         self.config.set("hand_eye_calibration", "num_poses_used", str(num_poses))
         self.config.set("hand_eye_calibration", "eye_in_hand", str(self.eye_in_hand_mode))
         self.config.set("hand_eye_calibration", "robot_model", str(self.robot_name))
+        self.config.set("hand_eye_calibration", "cell", self.cell)
+        self.config.set("hand_eye_calibration", "base_frame", self.base_frame)
+        self.config.set("hand_eye_calibration", "camera_frame", self.camera_frame)
         self.config.set("hand_eye_calibration", "timestamp", str(time.time()))
         
         with open(ini_path, 'w') as f:
@@ -397,6 +408,9 @@ class ComputeCalibState(EventState):
         calib_data = {
             'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
             'robot_model': str(self.robot_name),
+            'cell': self.cell,
+            'base_frame': self.base_frame,
+            'camera_frame': self.camera_frame,
             'eye_in_hand': bool(self.eye_in_hand_mode),
             'num_poses_used': int(num_poses),
             'transform_matrix': transform_matrix,

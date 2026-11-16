@@ -18,6 +18,7 @@ from rclpy.duration import Duration
 import tf2_ros
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+from charuco_calibrator.calibration_layout import robot_entry
 
 class TakePoseAndPictureState(EventState):
     """
@@ -25,8 +26,8 @@ class TakePoseAndPictureState(EventState):
     
     -- total_poses       int     TOTAL number of poses to capture
     -- camera_type       str     'realsense' or 'usb'
-    -- base_frame        str     Robot base frame (base)
-    -- tool_frame        str     End-effector frame (tool0)
+    -- base_frame        str     Robot base frame (None: the one of the robot in calibration_layout)
+    -- tool_frame        str     End-effector frame (None: the one of the robot in calibration_layout)
     -- pictures_folder   str     Folder for images
     -- robot_poses_folder str    Folder for poses
     -- output_folder     str     General output folder
@@ -48,25 +49,18 @@ class TakePoseAndPictureState(EventState):
         self.auto_capture = auto_capture
         self.poses_taken = 0
         
-        # Frame defaults based on robot_name if not specified
-        if base_frame is None or base_frame == 'base':
-            self.base_frame = 'link_base' if 'lite6' in self.robot_name.lower() else 'base'
-        else:
-            self.base_frame = base_frame
-            
-        if tool_frame is None or tool_frame == 'tool0':
-            self.tool_frame = 'link_eef' if 'lite6' in self.robot_name.lower() else 'tool0'
-        else:
-            self.tool_frame = tool_frame
-        
-        # Configure folders per robot and camera
-        base_path = os.path.expanduser('~/calibrations')
-        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
-        robot_calib_path = os.path.join(base_path, self.camera_type, 'extrinsic_calibration', robot_folder)
-        
-        self.output_folder = output_folder or os.path.join(robot_calib_path, 'charuco_table_poses')
-        self.pictures_folder = pictures_folder or os.path.join(robot_calib_path, 'pictures')
-        self.robot_poses_folder = robot_poses_folder or os.path.join(robot_calib_path, 'robot_poses')
+        # Frames of the robot (charuco_calibrator.calibration_layout) unless others are given
+        robot = robot_entry(self.robot_name)
+        self.base_frame = base_frame or robot['base_frame']
+        self.tool_frame = tool_frame or robot['tool_frame']
+
+        # The folders belong to one camera, robot and cell: the behaviour gives them
+        if not pictures_folder or not robot_poses_folder:
+            raise ValueError("TakePoseAndPictureState needs pictures_folder and robot_poses_folder "
+                             "(charuco_calibrator.calibration_layout.calibration_folders)")
+        self.pictures_folder = pictures_folder
+        self.robot_poses_folder = robot_poses_folder
+        self.output_folder = output_folder or os.path.join(os.path.dirname(pictures_folder), 'charuco_table_poses')
         
         # Create folders
         for folder in [self.pictures_folder, self.robot_poses_folder, self.output_folder]:

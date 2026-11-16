@@ -120,22 +120,25 @@ This repository supports dynamic path resolution per camera model (e.g., `realse
 - **Camera Intrinsics (`~/calibrations/<camera_model>/intrinsic_calibrations/`)**:
   - Saved with exact timestamp labels: `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
   - Active/latest intrinsic calibration is mirrored at `~/calibrations/<camera_model>/camera_intrinsics.yaml`.
-- **Extrinsic Calibrations per Camera & Robot (`~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/`)**:
-  - **UR5e**: `~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/` (`pictures/`, `robot_poses/`, `charuco_table_poses/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
-  - **UFactory Lite 6**: `~/calibrations/realsense_d435i/extrinsic_calibration/ufactory_lite6/` (`pictures/`, `robot_poses/`, `charuco_table_poses/`, `calibration_results/`, `camera_extrinsics.yaml`, `extrinsic_matrix.yaml`)
-  - The latest computed extrinsics are synced to the camera root folder (`~/calibrations/<camera_model>/`) for root-level compatibility.
+- **Extrinsic Calibrations per Camera, Robot & Cell (`~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/<cell>/`)**:
+  - A calibration belongs to one camera, one robot model **and one cell** (the place where that robot and that camera stand): the same robot model in another cell has another camera pose.
+  - Each cell folder holds `pictures/`, `robot_poses/`, `charuco_table_poses/` and `calibration_results/` (`camera_extrinsics.yaml`, `camera_extrinsics.ini`, `extrinsic_matrix.yaml`). Example: `~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/right/`.
+  - `camera_extrinsics.yaml` says what it is the calibration of: `robot_model`, `cell`, `base_frame` and `camera_frame`, besides the transform. The programs that use it check those fields.
+  - Folders and frames are decided in one place: `charuco_calibrator/charuco_calibrator/calibration_layout.py`.
 - **Robot Configuration Files (`~/calibrations/robot_calibration/<robot_name>/`)**:
-  - Contains platform config files such as `my_robot_calibration.yaml`.
+  - The factory kinematics calibration extracted from each robot.
 
 ### FlexBE Behavior Parameters (`capture_and_calibrate`)
 - **`camera_type`**: Set to `realsense_d435i` or custom camera identifier.
 - **`robot_name`**: Set to `ur5e` or `ufactory_lite6`.
-  - **UR5e**: Uses `ur_moveit_config`, `ur_moveit.launch.py`, `base_frame` = `base`, `tool_frame` = `tool0`.
+  - **UR5e**: Uses `ur_moveit_config`, `ur_moveit.launch.py`, `base_frame` = `base_link`, `tool_frame` = `tool0`. (`base_link`, not `base`: the UR `base` frame is the same point turned half a turn about the vertical axis, and the applications work in `base_link`.)
   - **UFactory Lite 6**: Uses `xarm_moveit_config`, `lite6_moveit_fake.launch.py` (sim) / `lite6_moveit_realmove.launch.py` (real), `base_frame` = `link_base`, `tool_frame` = `link_eef`.
+- **`cell`**: The cell the robot and the camera stand in (for example `right`, `left`, `basic`, `kth_table`). Required: the calibration is stored and identified per cell.
+- **`robot_ip`**: Leave it empty. The address of the robot of the cell is read from the robot addresses file of the installation, whose path is in the environment variable `UR_ONROBOT_ROBOT_ADDRESSES` (`default: {<cell>: <address>}`). No address is written in this repository. Type one only to use another robot.
 - **`camera_intrinsics_file`**: Set to `'latest'` to use the newest intrinsic file, or enter a specific timestamped filename from `~/calibrations/<camera_model>/intrinsic_calibrations/`.
 - **`use_fake_hardware`**: `True` for simulation (fake controllers), `False` for real hardware.
 
 ---
 
 ## Result Files
-Results are exported per-robot under `~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/` and synced to `~/calibrations/<camera_model>/`.
+Results are exported per robot and cell under `~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/<cell>/calibration_results/`.

@@ -15,6 +15,7 @@ import psutil
 import signal
 import numpy as np
 import tf_transformations
+from charuco_calibrator.calibration_layout import CAMERA_FRAME, robot_entry
 
 class OfflineFindCharucoState(EventState):
     """
@@ -23,7 +24,7 @@ class OfflineFindCharucoState(EventState):
     
     def __init__(self, pictures_folder=None, robot_poses_folder=None,
                  output_folder=None, eye_in_hand=False, robot_name='ur5e',
-                 camera_intrinsics_file='latest', camera_type='realsense_d435i'):
+                 camera_intrinsics_file='latest', camera_type='realsense_d435i', base_frame=None):
         super().__init__(
             outcomes=['completed', 'failed'],
             output_keys=['base_h_tool_accumulated', 'camera_h_charuco_accumulated']
@@ -36,9 +37,12 @@ class OfflineFindCharucoState(EventState):
         self.camera_intrinsics_file = camera_intrinsics_file
         self.camera_type = camera_type
         
-        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
-        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
-        self.output_folder = output_folder or os.path.join(robot_calib_path, 'charuco_table_poses')
+        # Frame the robot poses are expressed in, and the folders of the camera, robot and cell (given by the behaviour)
+        self.base_frame = base_frame or robot_entry(self.robot_name)['base_frame']
+        if not pictures_folder or not robot_poses_folder or not output_folder:
+            raise ValueError("OfflineFindCharucoState needs pictures_folder, robot_poses_folder and output_folder "
+                             "(charuco_calibrator.calibration_layout.calibration_folders)")
+        self.output_folder = output_folder
         self.detections_file = os.path.join(self.output_folder, 'charuco_detections.yaml')
         
         self.charuco_process = None
@@ -72,15 +76,13 @@ class OfflineFindCharucoState(EventState):
         self.base_h_tool_accumulated = TransformArray()
         self.camera_h_charuco_accumulated = TransformArray()
         
-        base_frame = 'link_base' if 'lite6' in self.robot_name.lower() else 'base'
-        
         self.base_h_tool_accumulated.header = Header()
         self.base_h_tool_accumulated.header.stamp = self._node.get_clock().now().to_msg()
-        self.base_h_tool_accumulated.header.frame_id = base_frame
+        self.base_h_tool_accumulated.header.frame_id = self.base_frame
         
         self.camera_h_charuco_accumulated.header = Header()
         self.camera_h_charuco_accumulated.header.stamp = self._node.get_clock().now().to_msg()
-        self.camera_h_charuco_accumulated.header.frame_id = 'camera_color_optical_frame'
+        self.camera_h_charuco_accumulated.header.frame_id = CAMERA_FRAME
         
         # Check if there are already saved detections
         if os.path.exists(self.detections_file):
@@ -131,6 +133,7 @@ class OfflineFindCharucoState(EventState):
                 '-p', f'output_folder:={self.output_folder}',
                 '-p', f'eye_in_hand:={eye_in_hand_str}',
                 '-p', f'robot_name:={self.robot_name}',
+                '-p', f'base_frame:={self.base_frame}',
                 '-p', f'camera_name:={self.camera_type}',
                 '-p', f'camera_intrinsics_file:={self.camera_intrinsics_file}',
                 '-p', 'publish_rate:=0.5',

@@ -66,7 +66,7 @@ class CharucoCameraCalibrationState(EventState):
         Logger.loginfo(f"📋 OpenCV version: {cv2.__version__}")
         Logger.loginfo(f"📏 Board: {self.col_count}x{self.row_count}, square={self.square_size}m, marker={self.marker_size}m")
     
-    def save_intrinsic_matrix_yaml(self, camera_matrix, dist_coeffs, image_size, robot_id=1, robot_name="ur5e", robot_ip=None):
+    def save_intrinsic_matrix_yaml(self, camera_matrix, dist_coeffs, image_size, robot_id=1, robot_name="ur5e"):
         """
         Saves the intrinsic matrix in the specific YAML format.
         """
@@ -200,8 +200,7 @@ class CharucoCameraCalibrationState(EventState):
                 dist_coeffs=dist_coeffs,
                 image_size=image_size,
                 robot_id=1,
-                robot_name=self.robot_name,
-                robot_ip="192.168.1.101"
+                robot_name=self.robot_name
             )
             
             # Update manifest dropdown options

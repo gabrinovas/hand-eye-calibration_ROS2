@@ -12,7 +12,8 @@ from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
 from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
-import os
+from charuco_calibrator.calibration_layout import CAMERA_FRAME, calibration_folders, robot_entry
+from charuco_calibrator.robot_addresses import cell_address
 # [MANUAL_IMPORT]
 # [/MANUAL_IMPORT]
 
@@ -31,10 +32,11 @@ class CaptureAndCalibrateSM(Behavior):
     PHASE 3: Offline processing with charuco_hand_eye
     PHASE 4: Automatic calibration computation with VISP
     
-    FINAL RESULTS:
-    - ~/calibrations/camera_extrinsics.yaml (main calibration)
-    - ~/calibrations/extrinsic_calibration/charuco_table_poses/ (intermediate detections)
-    - ~/calibrations/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
+    One calibration per camera, robot and cell. FINAL RESULTS, in
+    ~/calibrations/<camera>/extrinsic_calibration/<robot>/<cell>/:
+    - calibration_results/camera_extrinsics.yaml (main calibration: robot, cell, frames and transform)
+    - calibration_results/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
+    - charuco_table_poses/ (intermediate detections)
     """
     
     def __init__(self, node):
@@ -49,17 +51,12 @@ class CaptureAndCalibrateSM(Behavior):
         self.add_parameter('camera_intrinsics_file', 'latest')
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
         
-        # Robot parameters
+        # Robot parameters. cell: the cell the robot and the camera stand in (the calibration is stored per cell).
+        # robot_ip: empty takes the address of the cell from the robot addresses file of the installation.
         self.add_parameter('robot_name', 'ur5e')
-        self.add_parameter('robot_ip', '192.168.1.101')
+        self.add_parameter('cell', '')
+        self.add_parameter('robot_ip', '')
         self.add_parameter('use_fake_hardware', False)
-        
-        # UNIFIED PATHS - Dynamically resolved to user home per robot
-        base_calib_path = os.path.expanduser('~/calibrations/realsense_d435i/extrinsic_calibration/ur5e')
-        self.add_parameter('pictures_folder', f'{base_calib_path}/pictures')
-        self.add_parameter('robot_poses_folder', f'{base_calib_path}/robot_poses')
-        self.add_parameter('charuco_output_folder', f'{base_calib_path}/charuco_table_poses')
-        self.add_parameter('output_folder', base_calib_path)
 
         # Initialize states
         LaunchMoveItState.initialize_ros(node)
@@ -76,38 +73,23 @@ class CaptureAndCalibrateSM(Behavior):
         # x:30 y:50, x:130 y:50
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
 
-        # Register active IP in manifest enum options if not already present
-        try:
-            if self.robot_ip:
-                from hand_eye_flexbe_behaviors.manifest_utils import register_robot_ip_in_manifest
-                register_robot_ip_in_manifest(self.robot_ip)
-        except Exception:
-            pass
+        # MoveIt, frames and folders of the robot and the cell (charuco_calibrator.calibration_layout)
+        robot = robot_entry(self.robot_name)
+        self.moveit_config_package = robot['moveit_package']
+        self.moveit_launch_file = robot['moveit_launch_fake' if self.use_fake_hardware else 'moveit_launch']
+        self.base_frame, self.tool_frame = robot['base_frame'], robot['tool_frame']
+        folders = calibration_folders(self.camera_type, self.robot_name, self.cell)
+        self.output_folder = folders['root']
+        self.pictures_folder = folders['pictures']
+        self.robot_poses_folder = folders['robot_poses']
+        self.charuco_output_folder = folders['charuco_table_poses']
 
-        # Auto-configure robot-specific MoveIt, frame, and directory parameters based on robot_name
-        robot_lower = self.robot_name.lower()
-        if 'ur5e' in robot_lower or robot_lower == 'ur':
-            self.moveit_config_package = 'ur_moveit_config'
-            self.moveit_launch_file = 'ur_moveit.launch.py'
-            self.base_frame = 'base'
-            self.tool_frame = 'tool0'
-            robot_folder = 'ur5e'
-        elif 'lite6' in robot_lower or 'ufactory' in robot_lower:
-            self.moveit_config_package = 'xarm_moveit_config'
-            self.moveit_launch_file = 'lite6_moveit_fake.launch.py' if self.use_fake_hardware else 'lite6_moveit_realmove.launch.py'
-            self.base_frame = 'link_base'
-            self.tool_frame = 'link_eef'
-            robot_folder = 'ufactory_lite6'
-        else:
-            robot_folder = self.robot_name.lower().replace(' ', '_')
+        # The address of the real robot: the one given, else the one of the cell in the robot addresses file
+        robot_ip = str(self.robot_ip).strip()
+        if not robot_ip and not self.use_fake_hardware:
+            robot_ip = cell_address(str(self.cell).strip())
+        Logger.loginfo(f"Calibration of {self.robot_name} in the cell '{self.cell}': {self.output_folder}")
 
-        # Normalize directory paths per camera and robot
-        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
-        self.output_folder = robot_calib_path
-        self.pictures_folder = os.path.join(robot_calib_path, 'pictures')
-        self.robot_poses_folder = os.path.join(robot_calib_path, 'robot_poses')
-        self.charuco_output_folder = os.path.join(robot_calib_path, 'charuco_table_poses')
-        
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
@@ -122,7 +104,7 @@ class CaptureAndCalibrateSM(Behavior):
                     moveit_launch_file=self.moveit_launch_file,
                     robot_name=self.robot_name,
                     moveit_config_package=self.moveit_config_package,
-                    robot_ip=self.robot_ip,
+                    robot_ip=robot_ip,
                     use_fake_hardware=self.use_fake_hardware
                 ),
                 transitions={'done': 'Capture_Poses', 'failed': 'failed'},
@@ -152,7 +134,8 @@ class CaptureAndCalibrateSM(Behavior):
                     eye_in_hand=self.eye_in_hand,
                     robot_name=self.robot_name,
                     camera_intrinsics_file=self.camera_intrinsics_file,
-                    camera_type=self.camera_type
+                    camera_type=self.camera_type,
+                    base_frame=self.base_frame
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
                 autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},
@@ -169,7 +152,10 @@ class CaptureAndCalibrateSM(Behavior):
                     robot_name=self.robot_name,
                     customize_file=True,
                     launch_visp=True,
-                    output_folder=self.output_folder
+                    output_folder=self.output_folder,
+                    cell=str(self.cell).strip(),
+                    base_frame=self.base_frame,
+                    camera_frame=CAMERA_FRAME
                 ),
                 transitions={'finish': 'finished', 'failed': 'failed'},
                 autonomy={'finish': Autonomy.Off, 'failed': Autonomy.Off},

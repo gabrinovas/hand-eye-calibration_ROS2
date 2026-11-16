@@ -10,7 +10,7 @@
 from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
 from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
 from hand_eye_flexbe_states.compute_calib import ComputeCalibState
-import os
+from charuco_calibrator.calibration_layout import CAMERA_FRAME, calibration_folders, robot_entry
 # [MANUAL_IMPORT]
 # [/MANUAL_IMPORT]
 
@@ -41,15 +41,9 @@ class TestDetectionOnlySM(Behavior):
         # Behavior parameters
         self.add_parameter('camera_type', 'realsense_d435i')
         self.add_parameter('robot_name', 'ur5e')
+        self.add_parameter('cell', '')  # the cell whose stored pictures and poses are processed
         self.add_parameter('eye_in_hand', False)
         self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
-        
-        # PATHS - Dynamically resolved to user home per robot
-        base_calib_path = os.path.expanduser('~/calibrations/realsense_d435i/extrinsic_calibration/ur5e')
-        self.add_parameter('pictures_folder', f'{base_calib_path}/pictures')
-        self.add_parameter('robot_poses_folder', f'{base_calib_path}/robot_poses')
-        self.add_parameter('charuco_output_folder', f'{base_calib_path}/charuco_table_poses')
-        self.add_parameter('output_folder', base_calib_path)
 
         # Initialize states
         OfflineFindCharucoState.initialize_ros(node)
@@ -63,14 +57,13 @@ class TestDetectionOnlySM(Behavior):
     def create(self):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
         
-        # Normalize robot directory name and adjust paths
-        robot_folder = 'ufactory_lite6' if 'lite6' in self.robot_name.lower() else self.robot_name.lower()
-        robot_calib_path = os.path.join(os.path.expanduser('~/calibrations'), self.camera_type, 'extrinsic_calibration', robot_folder)
-        
-        self.output_folder = robot_calib_path
-        self.pictures_folder = os.path.join(robot_calib_path, 'pictures')
-        self.robot_poses_folder = os.path.join(robot_calib_path, 'robot_poses')
-        self.charuco_output_folder = os.path.join(robot_calib_path, 'charuco_table_poses')
+        # Frames and folders of the robot and the cell (charuco_calibrator.calibration_layout)
+        self.base_frame = robot_entry(self.robot_name)['base_frame']
+        folders = calibration_folders(self.camera_type, self.robot_name, self.cell)
+        self.output_folder = folders['root']
+        self.pictures_folder = folders['pictures']
+        self.robot_poses_folder = folders['robot_poses']
+        self.charuco_output_folder = folders['charuco_table_poses']
 
         # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
@@ -88,7 +81,8 @@ class TestDetectionOnlySM(Behavior):
                     output_folder=self.charuco_output_folder,
                     eye_in_hand=self.eye_in_hand,
                     robot_name=self.robot_name,
-                    camera_type=self.camera_type
+                    camera_type=self.camera_type,
+                    base_frame=self.base_frame
                 ),
                 transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
                 autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},
@@ -102,9 +96,13 @@ class TestDetectionOnlySM(Behavior):
                 ComputeCalibState(
                     eye_in_hand_mode=self.eye_in_hand,
                     calibration_file_name=self.calibration_file_name,
+                    robot_name=self.robot_name,
                     customize_file=True,
                     launch_visp=True,
-                    output_folder=self.output_folder
+                    output_folder=self.output_folder,
+                    cell=str(self.cell).strip(),
+                    base_frame=self.base_frame,
+                    camera_frame=CAMERA_FRAME
                 ),
                 transitions={'finish': 'finished', 'failed': 'failed'},
                 autonomy={'finish': Autonomy.Off, 'failed': Autonomy.Off},

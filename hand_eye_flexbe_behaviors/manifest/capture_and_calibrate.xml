@@ -6,29 +6,20 @@
     <author>Gabriel Novas</author>
     <date>2026-03-05</date>
     <description>
-        FULL Hand-Eye Calibration Behavior:
-        
+        FULL Hand-Eye Calibration Behavior. One calibration per camera, robot and cell (the place where that
+        robot and that camera stand): give the cell in the parameter "cell".
+
         PHASE 1: AUTO-LAUNCH: MoveIt + RViz open automatically
         PHASE 2: YOU CONTROL: Move robot with MoveIt interface
                 CAPTURE: Press SPACE at each pose
-                - Images: /calibrations/extrinsic_calibration/pictures/
-                - Poses: /calibrations/extrinsic_calibration/robot_poses/
-        
-        PHASE 3: AUTO-DETECT: charuco_hand_eye detects Charuco
-                - Uses intrinsic calibration: /calibrations/camera_intrinsics.yaml
-                - Saves detections: /calibrations/extrinsic_calibration/charuco_table_poses/
-        
+        PHASE 3: AUTO-DETECT: charuco_hand_eye detects Charuco in the pictures
         PHASE 4: AUTO-CALIBRATE: VISP calculates final calibration
-                - Main result: /calibrations/camera_extrinsics.yaml
-                - Extrinsic matrices: /calibrations/extrinsic_matrix.yaml
-                - Compact format with T_w2c and T_c2w for integration
-        
-        FINAL RESULTS:
-        - /home/aperta/calibrations/camera_extrinsics.yaml (detailed calibration)
-        - /home/aperta/calibrations/extrinsic_matrix.yaml (compact format)
-        - /home/aperta/calibrations/extrinsic_calibration/charuco_table_poses/ (detections)
-        - /home/aperta/calibrations/calibration_results/camera_extrinsics.ini (INI format)
-        - /home/aperta/calibrations/calibration_results/camera_extrinsics.yaml (detailed copy)
+
+        Everything is stored in ~/calibrations/CAMERA/extrinsic_calibration/ROBOT/CELL/:
+        - pictures/ and robot_poses/ (what was captured)
+        - charuco_table_poses/ (detections)
+        - calibration_results/camera_extrinsics.yaml (the result: robot, cell, frames and transform)
+        - calibration_results/camera_extrinsics.ini and extrinsic_matrix.yaml (other formats)
     </description>
 
     
@@ -46,17 +37,16 @@
         </param>
 
         
-        <param type="enum" name="robot_name" default="ur5e" label="Robot Name" hint="Select robot model (ur5e, ufactory_lite6, or other). Selecting ur5e or ufactory_lite6 automatically configures MoveIt parameters and frames.">
+        <param type="enum" name="robot_name" default="ur5e" label="Robot Name" hint="Select robot model (ur5e or ufactory_lite6): it sets the MoveIt launch, the frames and the calibration folder.">
             <option value="ur5e" />
             <option value="ufactory_lite6" />
-            <option value="other" />
         </param>
 
         
-        <param type="enum" name="robot_ip" default="192.168.1.101" label="Robot IP" hint="Select registered IP address from dropdown menu">
-            <option value="192.168.1.101" />
-            <option value="192.168.1.105" />
-        </param>
+        <param type="text" name="cell" default="" label="Cell" hint="Cell the robot and the camera stand in (for example right, left, basic, kth_table). The calibration is stored per cell." />
+
+        
+        <param type="text" name="robot_ip" default="" label="Robot IP" hint="Leave empty: the address of the cell is taken from the robot addresses file of the installation (UR_ONROBOT_ROBOT_ADDRESSES). Type one only to use another robot." />
 
         
         <param type="enum" name="camera_intrinsics_file" default="latest" label="Intrinsic Calibration Profile" hint="Select intrinsic camera profile from dropdown menu">
@@ -74,13 +64,6 @@
         <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" label="Calibration File" hint="Base name for calibration files (without extension)" />
 
         
-        <param type="text" name="output_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e" label="Output Folder" hint="Root folder where results will be saved per camera/robot" readonly="true" />
-
-        <param type="text" name="pictures_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/pictures" label="Pictures Folder" hint="Folder for images (created automatically)" readonly="true" />
-
-        <param type="text" name="robot_poses_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/robot_poses" label="Robot Poses Folder" hint="Folder for robot poses (created automatically)" readonly="true" />
-               
-        <param type="text" name="charuco_output_folder" default="~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/charuco_table_poses" label="Charuco Output Folder" hint="Folder for intermediate board detections" readonly="true" />
     </params>
 
 </behavior>
