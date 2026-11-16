@@ -1,0 +1,31 @@
+# Window the operator takes the pictures with, per capture. Texts are drawn with OpenCV (plain characters only);
+# {taken}, {total}, {remaining}, {folder} and {robot} are replaced. Colors are blue, green, red.
+keys:
+  capture: [13, 32]  # ENTER, SPACE
+  cancel: [27]  # ESC
+
+intrinsic:  # pictures of the board for the intrinsic calibration of the camera (TakePictureState)
+  window: {title: 'CALIBRATION - Manual photo capture', width: 1280, height: 720}
+  warm_up_s: 1.0  # wait after the camera starts
+  close_wait_cycles: 5  # window events processed after closing, so that the window really goes away
+  overlay: {margin_px: 10, bottom_px: 220, opacity: 0.5}  # dark band behind the texts
+  lines:
+    - {text: 'CAPTURED: {taken}/{total}', origin: [50, 60], scale: 1.5, color: [0, 255, 0], thickness: 3}
+    - {text: 'REMAINING: {remaining}', origin: [50, 120], scale: 1.2, color: [0, 255, 255], thickness: 2}
+    - {text: 'Saving in: {folder}', origin: [50, 170], scale: 0.8, color: [255, 255, 255], thickness: 2}
+    - {text: 'SPACE or ENTER: Take photo | ESC: Cancel', origin: [50, 220], scale: 0.9, color: [0, 255, 0], thickness: 2}
+
+hand_eye:  # pictures and robot poses of a camera-robot calibration (TakePoseAndPictureState)
+  window: {title: '{robot} CALIBRATION - Pose capture', width: 1280, height: 720}
+  warm_up_s: 0.0
+  close_wait_cycles: 0
+  overlay: {margin_px: 10, bottom_px: 220, opacity: 0.6}
+  lines:
+    - {text: '{robot} - EXTRINSIC CALIBRATION', origin: [50, 50], scale: 1.0, color: [255, 255, 0], thickness: 2}
+    - {text: 'CAPTURED: {taken}/{total}', origin: [50, 100], scale: 1.2, color: [0, 255, 0], thickness: 2}
+    - {text: 'REMAINING: {remaining}', origin: [50, 150], scale: 1.0, color: [0, 255, 255], thickness: 2}
+    - {text: 'SPACE: Capture | ESC: Cancel', origin: [50, 200], scale: 0.9, color: [255, 255, 255], thickness: 2}
+  robot_pose:
+    listen_wait_s: 2.0  # wait for the transforms of the robot after starting to listen
+    lookup_timeout_s: 1.0
+    frames_shown_chars: 200  # of the list of known frames, said when the pose cannot be read

@@ -1,69 +1,52 @@
-<?xml version='1.0' encoding='UTF-8'?>
+<?xml version="1.0" encoding="UTF-8"?>
+
 <behavior name="Capture and Calibrate Hand-Eye">
 
     <executable package_path="hand_eye_flexbe_behaviors.capture_and_calibrate_sm" class="CaptureAndCalibrateSM" />
-    <tagstring>v3.0</tagstring>
+    <tagstring>v3.1</tagstring>
     <author>Gabriel Novas</author>
-    <date>2026-03-05</date>
+    <date>2026-11-16</date>
     <description>
-        FULL Hand-Eye Calibration Behavior. One calibration per camera, robot and cell (the place where that
+        Camera-robot (hand-eye) calibration. One calibration per camera, robot and cell (the place where that
         robot and that camera stand): give the cell in the parameter "cell".
 
-        PHASE 1: AUTO-LAUNCH: MoveIt + RViz open automatically
-        PHASE 2: YOU CONTROL: Move robot with MoveIt interface
-                CAPTURE: Press SPACE at each pose
-        PHASE 3: AUTO-DETECT: charuco_hand_eye detects Charuco in the pictures
-        PHASE 4: AUTO-CALIBRATE: VISP calculates final calibration
+        1. MoveIt and RViz open.
+        2. Move the robot with MoveIt and press SPACE at each pose to capture a picture and the robot pose
+           (ESC cancels). The pictures and poses of a previous capture are deleted first.
+        3. The board is detected in the pictures (node charuco_hand_eye).
+        4. The ViSP solver computes the pose of the camera.
 
         Everything is stored in ~/calibrations/CAMERA/extrinsic_calibration/ROBOT/CELL/:
         - pictures/ and robot_poses/ (what was captured)
-        - charuco_table_poses/ (detections)
-        - calibration_results/camera_extrinsics.yaml (the result: robot, cell, frames and transform)
-        - calibration_results/camera_extrinsics.ini and extrinsic_matrix.yaml (other formats)
+        - charuco_table_poses/ (the pairs used and each picture with its detection drawn)
+        - calibration_results/camera_extrinsics.yaml (the result: robot, cell, frames, the transform and its
+          inverse)
     </description>
 
-    
     <params>
-        
         <param type="numeric" name="total_poses" default="20" label="Total Poses" hint="Number of poses to capture (minimum 5, maximum 50)">
             <min value="5" />
             <max value="50" />
         </param>
 
-        
-        <param type="enum" name="camera_type" default="realsense_d435i" label="Camera Type" hint="Select camera driver (realsense_d435i or other)">
+        <param type="enum" name="camera_type" default="realsense_d435i" label="Camera" hint="Camera of the calibration (a camera of charuco_calibrator/config/cameras.yaml)">
             <option value="realsense_d435i" />
-            <option value="other" />
         </param>
 
-        
-        <param type="enum" name="robot_name" default="ur5e" label="Robot Name" hint="Select robot model (ur5e or ufactory_lite6): it sets the MoveIt launch, the frames and the calibration folder.">
+        <param type="enum" name="robot_name" default="ur5e" label="Robot Name" hint="Robot model: it sets the MoveIt launch, the frames and the calibration folder (charuco_calibrator/config/robots.yaml)">
             <option value="ur5e" />
             <option value="ufactory_lite6" />
         </param>
 
-        
         <param type="text" name="cell" default="" label="Cell" hint="Cell the robot and the camera stand in (for example right, left, basic, kth_table). The calibration is stored per cell." />
 
-        
         <param type="text" name="robot_ip" default="" label="Robot IP" hint="Leave empty: the address of the cell is taken from the robot addresses file of the installation (UR_ONROBOT_ROBOT_ADDRESSES). Type one only to use another robot." />
 
-        
-        <param type="enum" name="camera_intrinsics_file" default="latest" label="Intrinsic Calibration Profile" hint="Select intrinsic camera profile from dropdown menu">
-            <option value="latest" />
-            <option value="camera_intrinsics_2026-03-04_09-02-39.yaml" />
-        </param>
+        <param type="text" name="camera_intrinsics_file" default="latest" label="Intrinsic Calibration" hint="latest (the intrinsic calibration in use, camera_intrinsics.yaml) or the name of one of the dated copies, camera_intrinsics_DATE.yaml" />
 
-        
-        <param type="boolean" name="eye_in_hand" default="False" label="Eye-in-Hand" hint="True if camera on robot, False if fixed" />
+        <param type="boolean" name="eye_in_hand" default="False" label="Eye-in-Hand" hint="True if the camera is on the robot, False if it is fixed" />
 
-        
-        <param type="boolean" name="use_fake_hardware" default="False" label="Use Fake Hardware" hint="True for simulation, False for real robot" />
-
-        
-        <param type="text" name="calibration_file_name" default="camera_extrinsics.yaml" label="Calibration File" hint="Base name for calibration files (without extension)" />
-
-        
+        <param type="boolean" name="use_fake_hardware" default="False" label="Use Fake Hardware" hint="True for a simulated robot, False for the real one" />
     </params>
 
 </behavior>

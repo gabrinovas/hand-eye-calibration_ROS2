@@ -1,64 +1,58 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-###########################################################
-#               WARNING: Generated code!                  #
-#              **************************                 #
-# Manual changes may get lost if file is generated again. #
-# Only code inside the [MANUAL] tags will be kept.        #
-###########################################################
+# Copyright 2026 Gabriel Novas
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
-from flexbe_core import Behavior, Autonomy, OperatableStateMachine, Logger
-from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
-from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
-from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
-from hand_eye_flexbe_states.compute_calib import ComputeCalibState
-from charuco_calibrator.calibration_layout import CAMERA_FRAME, calibration_folders, robot_entry
-from charuco_calibrator.robot_addresses import cell_address
+# This file keeps the layout the FlexBE editor generates, because the FlexBE app reads it to show
+# and run the behavior. It is maintained by hand: saving the behavior from the editor writes the
+# file again and keeps only the code inside the [MANUAL] tags.
+
+"""Behavior Capture and Calibrate Hand-Eye: camera-robot calibration of a robot in a cell."""
+
 # [MANUAL_IMPORT]
+from charuco_calibrator.calibration_layout import calibration_folders
+from charuco_calibrator.calibration_layout import camera_frame
+from charuco_calibrator.calibration_layout import checked_cell
+from charuco_calibrator.calibration_layout import robot_entry
+from charuco_calibrator.robot_addresses import cell_address
 # [/MANUAL_IMPORT]
+from flexbe_core import Autonomy, Behavior, Logger, OperatableStateMachine
+from hand_eye_flexbe_states.compute_calib import ComputeCalibState
+from hand_eye_flexbe_states.launch_moveit import LaunchMoveItState
+from hand_eye_flexbe_states.offline_find_charuco import OfflineFindCharucoState
+from hand_eye_flexbe_states.take_pose_and_picture import TakePoseAndPictureState
 
 
-'''
-Created on Thu Feb 26 2026
-@author: Gabriel Novas
-'''
 class CaptureAndCalibrateSM(Behavior):
     """
-    FULL Hand-Eye Calibration Behavior:
-    
-    PHASE 1: Launches MoveIt + RViz automatically
-    PHASE 2: You control the robot using MoveIt interface
-             Press SPACE at each pose to capture
-    PHASE 3: Offline processing with charuco_hand_eye
-    PHASE 4: Automatic calibration computation with VISP
-    
-    One calibration per camera, robot and cell. FINAL RESULTS, in
-    ~/calibrations/<camera>/extrinsic_calibration/<robot>/<cell>/:
-    - calibration_results/camera_extrinsics.yaml (main calibration: robot, cell, frames and transform)
-    - calibration_results/extrinsic_matrix.yaml (T_w2c and T_c2w matrices)
-    - charuco_table_poses/ (intermediate detections)
+    Calibrate the camera of a cell to its robot, capturing the pictures and the robot poses.
+
+    1. MoveIt and RViz are launched.
+    2. The operator moves the robot with MoveIt and presses SPACE at each pose to capture.
+    3. The board is detected in the pictures (node charuco_hand_eye).
+    4. The ViSP solver computes the pose of the camera.
+
+    One calibration per camera, robot and cell, stored in
+    <calibrations>/<camera>/extrinsic_calibration/<robot>/<cell>/: what was captured (pictures,
+    robot_poses), the detections (charuco_table_poses) and the result (calibration_results).
     """
-    
+
     def __init__(self, node):
         super(CaptureAndCalibrateSM, self).__init__()
         self.name = 'Capture and Calibrate Hand-Eye'
         self.node = node
 
-        # Behavior parameters
+        # parameters of this behavior: the same, with the same defaults, as its manifest
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense_d435i')
-        self.add_parameter('eye_in_hand', False)
-        self.add_parameter('camera_intrinsics_file', 'latest')
-        self.add_parameter('calibration_file_name', 'camera_extrinsics.yaml')
-        
-        # Robot parameters. cell: the cell the robot and the camera stand in (the calibration is stored per cell).
-        # robot_ip: empty takes the address of the cell from the robot addresses file of the installation.
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('cell', '')
         self.add_parameter('robot_ip', '')
+        self.add_parameter('camera_intrinsics_file', 'latest')
+        self.add_parameter('eye_in_hand', False)
         self.add_parameter('use_fake_hardware', False)
 
-        # Initialize states
         LaunchMoveItState.initialize_ros(node)
         TakePoseAndPictureState.initialize_ros(node)
         OfflineFindCharucoState.initialize_ros(node)
@@ -72,97 +66,82 @@ class CaptureAndCalibrateSM(Behavior):
     def create(self):
         # x:30 y:50, x:130 y:50
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
-
-        # MoveIt, frames and folders of the robot and the cell (charuco_calibrator.calibration_layout)
-        robot = robot_entry(self.robot_name)
-        self.moveit_config_package = robot['moveit_package']
-        self.moveit_launch_file = robot['moveit_launch_fake' if self.use_fake_hardware else 'moveit_launch']
-        self.base_frame, self.tool_frame = robot['base_frame'], robot['tool_frame']
-        folders = calibration_folders(self.camera_type, self.robot_name, self.cell)
-        self.output_folder = folders['root']
-        self.pictures_folder = folders['pictures']
-        self.robot_poses_folder = folders['robot_poses']
-        self.charuco_output_folder = folders['charuco_table_poses']
-
-        # The address of the real robot: the one given, else the one of the cell in the robot addresses file
-        robot_ip = str(self.robot_ip).strip()
-        if not robot_ip and not self.use_fake_hardware:
-            robot_ip = cell_address(str(self.cell).strip())
-        Logger.loginfo(f"Calibration of {self.robot_name} in the cell '{self.cell}': {self.output_folder}")
-
-        # Variables to pass data between states
         _state_machine.userdata.base_h_tool_accumulated = None
         _state_machine.userdata.camera_h_charuco_accumulated = None
 
         # [MANUAL_CREATE]
+        # frames and folders of the robot and the cell, and the address of the real robot: the one
+        # given, else the one of the cell in the robot addresses file of the installation
+        robot = robot_entry(self.robot_name)
+        cell = checked_cell(self.cell)
+        folders = calibration_folders(self.camera_type, self.robot_name, cell)
+        base_frame, tool_frame = robot['base_frame'], robot['tool_frame']
+        pictures_folder, poses_folder = folders['pictures'], folders['robot_poses']
+        pairs_folder, calibration_folder = folders['charuco_table_poses'], folders['root']
+        camera = camera_frame()
+        robot_ip = str(self.robot_ip).strip()
+        if not robot_ip and not self.use_fake_hardware:
+            robot_ip = cell_address(cell)
+        Logger.loginfo(f"Calibration of {self.robot_name} in the cell '{cell}': "
+                       f'{calibration_folder}')
         # [/MANUAL_CREATE]
 
         with _state_machine:
-            # STATE 1: Launch MoveIt
+            # x:30 y:150
             OperatableStateMachine.add('Launch_MoveIt',
-                LaunchMoveItState(
-                    moveit_launch_file=self.moveit_launch_file,
-                    robot_name=self.robot_name,
-                    moveit_config_package=self.moveit_config_package,
-                    robot_ip=robot_ip,
-                    use_fake_hardware=self.use_fake_hardware
-                ),
-                transitions={'done': 'Capture_Poses', 'failed': 'failed'},
-                autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
+                                       LaunchMoveItState(
+                                           robot_name=self.robot_name,
+                                           robot_ip=robot_ip,
+                                           use_fake_hardware=self.use_fake_hardware),
+                                       transitions={'done': 'Capture_Poses', 'failed': 'failed'},
+                                       autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
-            # STATE 2: Capture poses (you with SPACE)
+            # x:230 y:150
             OperatableStateMachine.add('Capture_Poses',
-                TakePoseAndPictureState(
-                    total_poses=self.total_poses,
-                    camera_type=self.camera_type,
-                    robot_name=self.robot_name,
-                    base_frame=self.base_frame,
-                    tool_frame=self.tool_frame,
-                    pictures_folder=self.pictures_folder,
-                    robot_poses_folder=self.robot_poses_folder,
-                    auto_capture=False
-                ),
-                transitions={'done': 'Process_Offline', 'failed': 'failed'},
-                autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
+                                       TakePoseAndPictureState(
+                                           total_poses=self.total_poses,
+                                           camera_type=self.camera_type,
+                                           robot_name=self.robot_name,
+                                           base_frame=base_frame,
+                                           tool_frame=tool_frame,
+                                           pictures_folder=pictures_folder,
+                                           robot_poses_folder=poses_folder),
+                                       transitions={'done': 'Process_Offline', 'failed': 'failed'},
+                                       autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
-            # STATE 3: Process offline with charuco_hand_eye
+            # x:430 y:150
             OperatableStateMachine.add('Process_Offline',
-                OfflineFindCharucoState(
-                    pictures_folder=self.pictures_folder,
-                    robot_poses_folder=self.robot_poses_folder,
-                    output_folder=self.charuco_output_folder,
-                    eye_in_hand=self.eye_in_hand,
-                    robot_name=self.robot_name,
-                    camera_intrinsics_file=self.camera_intrinsics_file,
-                    camera_type=self.camera_type,
-                    base_frame=self.base_frame
-                ),
-                transitions={'completed': 'Compute_Calibration', 'failed': 'failed'},
-                autonomy={'completed': Autonomy.Off, 'failed': Autonomy.Off},
-                remapping={
-                    'base_h_tool_accumulated': 'base_h_tool_accumulated',
-                    'camera_h_charuco_accumulated': 'camera_h_charuco_accumulated'
-                })
+                                       OfflineFindCharucoState(
+                                           pictures_folder=pictures_folder,
+                                           robot_poses_folder=poses_folder,
+                                           output_folder=pairs_folder,
+                                           eye_in_hand=self.eye_in_hand,
+                                           camera_intrinsics_file=self.camera_intrinsics_file,
+                                           camera_type=self.camera_type,
+                                           base_frame=base_frame),
+                                       transitions={'completed': 'Compute_Calibration',
+                                                    'failed': 'failed'},
+                                       autonomy={'completed': Autonomy.Off,
+                                                 'failed': Autonomy.Off},
+                                       remapping={'base_h_tool_accumulated':
+                                                  'base_h_tool_accumulated',
+                                                  'camera_h_charuco_accumulated':
+                                                  'camera_h_charuco_accumulated'})
 
-            # STATE 4: Compute calibration with VISP
+            # x:630 y:150
             OperatableStateMachine.add('Compute_Calibration',
-                ComputeCalibState(
-                    eye_in_hand_mode=self.eye_in_hand,
-                    calibration_file_name=self.calibration_file_name,
-                    robot_name=self.robot_name,
-                    customize_file=True,
-                    launch_visp=True,
-                    output_folder=self.output_folder,
-                    cell=str(self.cell).strip(),
-                    base_frame=self.base_frame,
-                    camera_frame=CAMERA_FRAME
-                ),
-                transitions={'finish': 'finished', 'failed': 'failed'},
-                autonomy={'finish': Autonomy.Off, 'failed': Autonomy.Off},
-                remapping={
-                    'base_h_tool': 'base_h_tool_accumulated',
-                    'camera_h_charuco': 'camera_h_charuco_accumulated'
-                })
+                                       ComputeCalibState(
+                                           eye_in_hand_mode=self.eye_in_hand,
+                                           robot_name=self.robot_name,
+                                           output_folder=calibration_folder,
+                                           cell=cell,
+                                           base_frame=base_frame,
+                                           camera_frame=camera),
+                                       transitions={'finish': 'finished', 'failed': 'failed'},
+                                       autonomy={'finish': Autonomy.Off, 'failed': Autonomy.Off},
+                                       remapping={'base_h_tool': 'base_h_tool_accumulated',
+                                                  'camera_h_charuco':
+                                                  'camera_h_charuco_accumulated'})
 
         return _state_machine
 

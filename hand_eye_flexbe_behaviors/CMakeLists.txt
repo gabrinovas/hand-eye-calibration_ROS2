@@ -1,21 +1,28 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.8)
 project(hand_eye_flexbe_behaviors)
-
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclpy REQUIRED)
 
-install(DIRECTORY
-  manifest
-  DESTINATION lib/${PROJECT_NAME}/manifest
-)
-
-# Instalar el paquete Python
 ament_python_install_package(${PROJECT_NAME})
+
+# FlexBE looks for the behavior manifests under lib/<package>/manifest
+install(DIRECTORY manifest DESTINATION lib/${PROJECT_NAME}/manifest)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_copyright REQUIRED)
+  find_package(ament_cmake_flake8 REQUIRED)
+  find_package(ament_cmake_pep257 REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_copyright()
+  ament_flake8()
+  ament_pep257()
+  ament_has_pytest(pytest_runs QUIET)
+  if(pytest_runs)
+    ament_add_pytest_test(${PROJECT_NAME}_pytest test)
+  else()
+    message(STATUS "pytest does not run here: the tests of ${PROJECT_NAME} are not registered")
+  endif()
+endif()
 
 ament_package()

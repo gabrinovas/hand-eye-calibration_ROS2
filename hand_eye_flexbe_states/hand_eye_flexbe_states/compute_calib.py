@@ -1,501 +1,123 @@
-#!/usr/bin/env python3
-"""
-FlexBE state to compute hand-eye calibration with VISP.
-Launches VISP automatically if it is not running.
-Adapted for UR5e.
-"""
+# Copyright 2021 Chien shao-yu, Gabriel Novas
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
-import configparser
-import yaml
+"""FlexBE state that computes a camera-robot calibration with the ViSP solver."""
+
 import os
-import subprocess
 import time
-import psutil
-import numpy as np
-import signal
-from geometry_msgs.msg import Transform
-from visp_hand2eye_calibration.msg import TransformArray
-from visp_hand2eye_calibration.srv import ComputeEffectorCameraQuick
+
+from charuco_calibrator.results_io import write_result
+from charuco_calibrator.transforms import euler_of, inverted
 from flexbe_core import EventState, Logger
 from flexbe_core.proxy import ProxyServiceCaller
-import tf_transformations
+from hand_eye_flexbe_states.managed_process import executable_running, ManagedProcess, ros_lists
+from hand_eye_flexbe_states.settings import processes
+from visp_hand2eye_calibration.msg import TransformArray
+from visp_hand2eye_calibration.srv import ComputeEffectorCameraQuick
+
 
 class ComputeCalibState(EventState):
     """
-    Computes hand-eye calibration with VISP (auto-launched).
-    
-    -- eye_in_hand_mode      bool     True: eye-in-hand
-    -- calibration_file_name string   Output file name
-    -- customize_file        bool     Use custom name
-    -- launch_visp           bool     Launch VISP automatically
-    -- output_folder         string   Folder of the camera, robot and cell (calibration_layout)
-    -- cell                  string   Cell the calibration belongs to (written in the result)
-    -- base_frame            string   Robot frame the result is expressed in (written in the result)
-    -- camera_frame          string   Camera frame of the result (written in the result)
-    
-    ># base_h_tool           TransformArray  Robot poses (base→tool)
-    ># camera_h_charuco      TransformArray  Board poses (camera→charuco)
-    
-    <= finish                Calibration completed
-    <= failed                Error
+    Compute the pose of the camera from the pairs of a calibration and write the result.
+
+    The ViSP solver is started when the behavior starts (unless it is already running) and
+    stopped when it ends. The result says what it is the calibration of: robot, cell and frames.
+
+    -- eye_in_hand_mode  bool    True: the camera is on the robot
+    -- robot_name        string  Robot of the calibration (written in the result)
+    -- output_folder     string  Folder of the calibration of the camera, robot and cell
+    -- cell              string  Cell of the calibration (written in the result)
+    -- base_frame        string  Frame of the robot the result is expressed in
+    -- camera_frame      string  Frame of the camera of the result
+
+    ># base_h_tool       TransformArray  Robot poses (base to tool)
+    ># camera_h_charuco  TransformArray  Board poses (camera to board)
+
+    <= finish  Calibration computed and written
+    <= failed  There are no pairs, or the solver failed
     """
-    
-    def __init__(self, eye_in_hand_mode, calibration_file_name, 
-                 robot_name='ur5e', customize_file=False,
-                 launch_visp=True, output_folder=None, cell=None, base_frame=None, camera_frame=None):
-        super().__init__(
-            outcomes=['finish', 'failed'],
-            input_keys=['base_h_tool', 'camera_h_charuco']
-        )
-        
-        self.eye_in_hand_mode = eye_in_hand_mode
-        self.robot_name = robot_name
-        # A result says what it is the calibration of: robot, cell and frames. The programs that use it check them.
-        if not output_folder or not cell or not base_frame or not camera_frame:
-            raise ValueError("ComputeCalibState needs output_folder, cell, base_frame and camera_frame "
-                             "(charuco_calibrator.calibration_layout)")
-        self.cell, self.base_frame, self.camera_frame = str(cell), str(base_frame), str(camera_frame)
-        self.launch_visp = launch_visp
-        self.visp_process = None
-        self.calib_client = None
-        self._service_ready = False
-        
-        # Configure output folders
-        self.output_folder = output_folder
-        self.calib_results_folder = os.path.join(self.output_folder, 'calibration_results')
-        os.makedirs(self.calib_results_folder, exist_ok=True)
-        
-        # Output file
-        if customize_file:
-            # If it already has an extension, remove it to handle consistency
-            base_name = str(calibration_file_name)
-            if base_name.endswith('.ini') or base_name.endswith('.yaml'):
-                base_name = os.path.splitext(base_name)[0]
-            self.calibration_base_name = base_name
-        else:
-            if eye_in_hand_mode:
-                self.calibration_base_name = f"eye_in_hand_calibration_{self.robot_name}"
-            else:
-                self.calibration_base_name = f"eye_to_hand_calibration_{self.robot_name}"
-        
-        # Output files with correct extensions
-        self.ini_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.ini")
-        self.yaml_file = os.path.join(self.calib_results_folder, f"{self.calibration_base_name}.yaml")
-        
-        # Main output file inside calibration_results folder
-        self.main_output_file = os.path.join(self.calib_results_folder, 'camera_extrinsics.yaml')
-        
-        # Duplicate detections file to delete
-        self.temp_detections_file = os.path.join(self.output_folder, 'charuco_table_poses', 'charuco_detections.yaml')
-        
-        # Config parser for INI
-        self.config = configparser.ConfigParser()
-        self.config.optionxform = str
-        
-        Logger.loginfo("="*60)
-        Logger.loginfo(f"🔧 STATE: ComputeCalibState ({self.robot_name})")
-        Logger.loginfo("="*60)
-        Logger.loginfo(f"🎯 Mode: {'Eye-in-hand' if eye_in_hand_mode else 'Eye-to-hand'}")
-        Logger.loginfo(f"📁 Base file: {self.calibration_base_name}")
-        Logger.loginfo(f"📂 Folder: {self.calib_results_folder}")
-        Logger.loginfo(f"📄 INI file: {self.ini_file}")
-        Logger.loginfo(f"📄 YAML file: {self.yaml_file}")
-        Logger.loginfo(f"📄 Main file: {self.main_output_file}")
-        Logger.loginfo(f"📄 Temp file to delete: {self.temp_detections_file}")
-        Logger.loginfo(f"🚀 Auto-VISP: {launch_visp}")
-    
+
+    def __init__(self, eye_in_hand_mode, robot_name, output_folder, cell, base_frame,
+                 camera_frame):
+        super().__init__(outcomes=['finish', 'failed'],
+                         input_keys=['base_h_tool', 'camera_h_charuco'])
+        self.about = {'robot_model': str(robot_name), 'cell': str(cell),
+                      'base_frame': str(base_frame), 'camera_frame': str(camera_frame),
+                      'eye_in_hand': bool(eye_in_hand_mode)}
+        missing = [key for key, value in self.about.items() if value == '']
+        if missing or not output_folder:
+            raise ValueError('[Fail-Fast] ComputeCalibState needs output_folder and the robot, '
+                             'cell and frames of the calibration; missing: '
+                             f'{missing or "output_folder"}')
+        self.folder = os.path.join(str(output_folder), 'calibration_results')
+        self.settings = processes('visp')
+        self.solver = ManagedProcess(['ros2', 'run', self.settings['package'],
+                                      self.settings['executable']], quiet=False)
+        self.client = None
+        Logger.loginfo(f'The calibration will be written in {self.folder}')
+
     def on_start(self):
-        """Initialize: launch VISP if necessary"""
-        # Initialize proxy with FlexBE node
+        """Start the solver when the behavior starts, unless it is already running."""
         ProxyServiceCaller.initialize(ComputeCalibState._node)
-        
-        if self.launch_visp:
-            self._ensure_visp_running()
-        
-        # Now create the client
-        self.calib_client = ProxyServiceCaller({
-            '/compute_effector_camera_quick': ComputeEffectorCameraQuick
-        })
-        
-        # Verify service is available
-        if self.calib_client.is_available('/compute_effector_camera_quick'):
-            self._service_ready = True
-            Logger.loginfo("✅ VISP service available")
-        else:
-            Logger.logwarn("⏳ Waiting for VISP service...")
-    
-    def _ensure_visp_running(self):
-        """Launches VISP if it is not running"""
-        if self._is_visp_running():
-            Logger.loginfo("✅ VISP is already running")
-            return True
-        
-        Logger.loginfo("🚀 Launching VISP node...")
-        
-        try:
-            # Convert boolean to string 'true'/'false' for ROS2
-            eye_in_hand_str = 'true' if self.eye_in_hand_mode else 'false'
-            
-            cmd = [
-                'ros2', 'run', 
-                'visp_hand2eye_calibration', 
-                'visp_hand2eye_calibration_calibrator',
-                '--ros-args',
-                '-p', f'eye_in_hand:={eye_in_hand_str}',
-                '-p', 'camera_frame:=camera_color_optical_frame',
-                '-p', 'marker_frame:=charuco_frame'
-            ]
-            
-            Logger.loginfo(f"📋 Command: {' '.join(cmd)}")
-            
-            self.visp_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True,
-                text=True
-            )
-            
-            # Wait for it to start
-            Logger.loginfo("⏳ Waiting for VISP to start...")
-            
-            for i in range(15):
-                time.sleep(1)
-                if self._is_visp_running():
-                    Logger.loginfo(f"✅ VISP started successfully after {i+1}s")
-                    return True
-                
-                # Check if process failed
-                if self.visp_process.poll() is not None:
-                    stdout, stderr = self.visp_process.communicate()
-                    Logger.logerr(f"❌ VISP terminated prematurely")
-                    if stderr:
-                        Logger.logerr(f"Error: {stderr}")
-                    return False
-            
-            Logger.logwarn("⚠️ VISP is not responding but might be starting...")
-            return True
-            
-        except Exception as e:
-            Logger.logerr(f"❌ Error launching VISP: {e}")
-            return False
-    
-    def _is_visp_running(self):
-        """Verifies if VISP is running"""
-        try:
-            # Search by process
-            for proc in psutil.process_iter(['pid', 'cmdline']):
-                try:
-                    if proc.info['cmdline'] and any('visp_hand2eye_calibration_calibrator' in cmd for cmd in proc.info['cmdline'] if cmd):
-                        return True
-                except:
-                    pass
-            
-            # Also check service
-            try:
-                result = subprocess.run(
-                    ['ros2', 'service', 'list'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
-                if '/compute_effector_camera_quick' in result.stdout:
-                    return True
-            except:
-                pass
-                
-        except Exception as e:
-            Logger.logwarn(f"⚠️ Error checking VISP: {e}")
-        
-        return False
-    
+        if not self.solver_running():
+            Logger.loginfo('Starting the ViSP solver')
+            self.solver.start()
+            waited = 0.0
+            while waited < self.settings['start_timeout_s'] and not self.solver_running():
+                if self.solver.ended():
+                    Logger.logerr('The ViSP solver ended at start: its error is above')
+                    break
+                time.sleep(self.settings['poll_period_s'])
+                waited += self.settings['poll_period_s']
+        self.client = ProxyServiceCaller({self.settings['service']: ComputeEffectorCameraQuick})
+
+    def solver_running(self):
+        """Return whether the solver runs: its process exists or its service is listed."""
+        return (executable_running(self.settings['executable'])
+                or ros_lists('service', [self.settings['service']]))
+
     def execute(self, userdata):
-        """Executes the calibration with the received data"""
-        
-        # Verify service is ready
-        if not self._service_ready:
-            if self.calib_client and self.calib_client.is_available('/compute_effector_camera_quick'):
-                self._service_ready = True
-                Logger.loginfo("✅ VISP service is now available")
-            else:
-                Logger.logwarn("⏳ Waiting for VISP service to be available...")
-                return None  # Do not fail, just wait
-        
-        # Verify data
-        if not hasattr(userdata.base_h_tool, 'transforms') or len(userdata.base_h_tool.transforms) == 0:
-            Logger.logerr("❌ No robot poses received")
-            return 'failed'
-        
-        if not hasattr(userdata.camera_h_charuco, 'transforms') or len(userdata.camera_h_charuco.transforms) == 0:
-            Logger.logerr("❌ No board poses received")
-            return 'failed'
-        
-        # Verify pose count matches
-        if len(userdata.base_h_tool.transforms) != len(userdata.camera_h_charuco.transforms):
-            Logger.logerr(f"❌ Pose count mismatch: robot={len(userdata.base_h_tool.transforms)}, board={len(userdata.camera_h_charuco.transforms)}")
-            return 'failed'
-        
-        num_poses = len(userdata.base_h_tool.transforms)
-        Logger.loginfo(f"📊 Calibrating with {num_poses} poses")
-        
-        # Verify service available
-        if not self.calib_client.is_available('/compute_effector_camera_quick'):
-            Logger.logerr("❌ VISP service not available")
-            return 'failed'
-        
-        # Prepare request
-        req = ComputeEffectorCameraQuick.Request()
-        req.camera_object = TransformArray()
-        req.world_effector = TransformArray()
-        req.camera_object.header = userdata.camera_h_charuco.header
-        req.world_effector.header = userdata.base_h_tool.header
-        
-        # Process based on mode
-        if self.eye_in_hand_mode:
-            # Eye-in-hand mode: use directly
-            Logger.loginfo("🔄 Eye-in-hand mode: using poses directly")
-            req.world_effector.transforms = userdata.base_h_tool.transforms
-            req.camera_object.transforms = userdata.camera_h_charuco.transforms
-        else:
-            # Eye-to-hand mode: invert world_effector transforms manually
-            Logger.loginfo("🔄 Eye-to-hand mode: inverting world_effector transforms manually")
-            req.world_effector.transforms = [self._invert_transform(p) for p in userdata.base_h_tool.transforms]
-            req.camera_object.transforms = userdata.camera_h_charuco.transforms
-        
-        try:
-            # Call service
-            Logger.loginfo("📡 Calling VISP calibration service...")
-            res = self.calib_client.call('/compute_effector_camera_quick', req)
-            
-            if res is None:
-                Logger.logerr("❌ Service did not return a response")
+        """Ask the solver for the calibration once its service is there, and write the result."""
+        service = self.settings['service']
+        if self.client is None or not self.client.is_available(service):
+            if self.solver.ended():
+                Logger.logerr('The ViSP solver is not running')
                 return 'failed'
-            
-            # Show result
-            Logger.loginfo("="*60)
-            Logger.loginfo(f"✅ CALIBRATION COMPLETED - {self.robot_name}")
-            Logger.loginfo("="*60)
-            Logger.loginfo(f"📐 Translation (meters):")
-            Logger.loginfo(f"   x = {res.effector_camera.translation.x:.6f}")
-            Logger.loginfo(f"   y = {res.effector_camera.translation.y:.6f}")
-            Logger.loginfo(f"   z = {res.effector_camera.translation.z:.6f}")
-            Logger.loginfo(f"🌀 Quaternion:")
-            Logger.loginfo(f"   qx = {res.effector_camera.rotation.x:.6f}")
-            Logger.loginfo(f"   qy = {res.effector_camera.rotation.y:.6f}")
-            Logger.loginfo(f"   qz = {res.effector_camera.rotation.z:.6f}")
-            Logger.loginfo(f"   qw = {res.effector_camera.rotation.w:.6f}")
-            
-            # Convert to Euler angles for UR
-            quat = [res.effector_camera.rotation.x,
-                   res.effector_camera.rotation.y,
-                   res.effector_camera.rotation.z,
-                   res.effector_camera.rotation.w]
-            euler = tf_transformations.euler_from_quaternion(quat)
-            Logger.loginfo(f"📐 Euler angles (rad):")
-            Logger.loginfo(f"   roll = {euler[0]:.6f}, pitch = {euler[1]:.6f}, yaw = {euler[2]:.6f}")
-            
-            # Save result
-            self._save_calibration(res.effector_camera, num_poses)
-            
-            # Remove temporary detections file
-            self._cleanup_temp_files()
-            
-            return 'finish'
-            
-        except Exception as e:
-            Logger.logerr(f"❌ Calibration error: {e}")
+            Logger.logwarn('Waiting for the service of the ViSP solver')
+            return None
+        robot, board = userdata.base_h_tool, userdata.camera_h_charuco
+        counts = [len(poses.transforms) if hasattr(poses, 'transforms') else 0
+                  for poses in (robot, board)]
+        if counts[0] == 0 or counts[0] != counts[1]:
+            Logger.logerr(f'Nothing to calibrate with: {counts[0]} robot poses and {counts[1]} '
+                          'board poses')
             return 'failed'
-    
-    def _invert_transform(self, t):
-        """Inverts a transformation using scipy as recommended"""
-        from scipy.spatial.transform import Rotation as R
-        
-        # Extract quaternion (x, y, z, w) and position
-        quat = [t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]
-        pos = [t.translation.x, t.translation.y, t.translation.z]
-        
-        # 1. Convert to 3x3 rotation matrix using scipy
-        rot_matrix = R.from_quat(quat).as_matrix()
-        
-        # 2. Translation vector (3x1)
-        t_vector = np.array(pos).reshape(3, 1)
-        
-        # Invert rotation and translation to be "base to tool"
-        R_base2gripper = rot_matrix.T
-        t_base2gripper = -rot_matrix.T @ t_vector
-        
-        # Create inverse transform
-        inv = Transform()
-        inv.translation.x = float(t_base2gripper[0, 0])
-        inv.translation.y = float(t_base2gripper[1, 0])
-        inv.translation.z = float(t_base2gripper[2, 0])
-        
-        # Convert back to quaternion
-        quat_inv = R.from_matrix(R_base2gripper).as_quat()
-        inv.rotation.x = float(quat_inv[0])
-        inv.rotation.y = float(quat_inv[1])
-        inv.rotation.z = float(quat_inv[2])
-        inv.rotation.w = float(quat_inv[3])
-        
-        return inv
-    
-    def _cleanup_temp_files(self):
-        """Deletes temporary files after calibration"""
-        temp_files = [
-            self.temp_detections_file,
-            os.path.join(self.output_folder, 'charuco_detections.yaml')
-        ]
-        for fpath in temp_files:
-            try:
-                if os.path.exists(fpath):
-                    os.remove(fpath)
-                    Logger.loginfo(f"🧹 Temporary file removed: {fpath}")
-            except Exception as e:
-                Logger.logwarn(f"⚠️ Could not delete temporary file {fpath}: {e}")
-    
-    def _save_calibration(self, transform, num_poses):
-        """Saves the calibration in INI, YAML format and main file"""
-        
-        # ===== Save INI =====
-        ini_path = self.ini_file
-        
-        if os.path.exists(ini_path):
-            self.config.read(ini_path)
-        
-        if not self.config.has_section("hand_eye_calibration"):
-            self.config.add_section("hand_eye_calibration")
-        
-        self.config.set("hand_eye_calibration", "x", str(transform.translation.x))
-        self.config.set("hand_eye_calibration", "y", str(transform.translation.y))
-        self.config.set("hand_eye_calibration", "z", str(transform.translation.z))
-        self.config.set("hand_eye_calibration", "qx", str(transform.rotation.x))
-        self.config.set("hand_eye_calibration", "qy", str(transform.rotation.y))
-        self.config.set("hand_eye_calibration", "qz", str(transform.rotation.z))
-        self.config.set("hand_eye_calibration", "qw", str(transform.rotation.w))
-        self.config.set("hand_eye_calibration", "num_poses_used", str(num_poses))
-        self.config.set("hand_eye_calibration", "eye_in_hand", str(self.eye_in_hand_mode))
-        self.config.set("hand_eye_calibration", "robot_model", str(self.robot_name))
-        self.config.set("hand_eye_calibration", "cell", self.cell)
-        self.config.set("hand_eye_calibration", "base_frame", self.base_frame)
-        self.config.set("hand_eye_calibration", "camera_frame", self.camera_frame)
-        self.config.set("hand_eye_calibration", "timestamp", str(time.time()))
-        
-        with open(ini_path, 'w') as f:
-            self.config.write(f)
-        
-        Logger.loginfo(f"💾 Calibration saved (INI): {ini_path}")
-        
-        # ===== Save YAML =====
-        yaml_path = self.yaml_file
-        
-        # Complete transformation matrix
-        T = np.eye(4)
-        quat = [transform.rotation.x, transform.rotation.y, 
-                transform.rotation.z, transform.rotation.w]
-        R = tf_transformations.quaternion_matrix(quat)[:3, :3]
-        T[:3, :3] = R
-        T[:3, 3] = [transform.translation.x, transform.translation.y, transform.translation.z]
-        
-        # Convert to Euler angles for UR
-        euler = tf_transformations.euler_from_quaternion(quat)
-        
-        # Convert matrix to native float list
-        transform_matrix = []
-        for row in T.tolist():
-            transform_matrix.append([float(x) for x in row])
-        
-        # Convert all numpy values to native floats
-        calib_data = {
-            'calibration_date': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'robot_model': str(self.robot_name),
-            'cell': self.cell,
-            'base_frame': self.base_frame,
-            'camera_frame': self.camera_frame,
-            'eye_in_hand': bool(self.eye_in_hand_mode),
-            'num_poses_used': int(num_poses),
-            'transform_matrix': transform_matrix,
-            'translation': {
-                'x': float(transform.translation.x),
-                'y': float(transform.translation.y),
-                'z': float(transform.translation.z)
-            },
-            'rotation_quaternion': {
-                'x': float(transform.rotation.x),
-                'y': float(transform.rotation.y),
-                'z': float(transform.rotation.z),
-                'w': float(transform.rotation.w)
-            },
-            'rotation_euler_rad': {
-                'roll': float(euler[0]),
-                'pitch': float(euler[1]),
-                'yaw': float(euler[2])
-            },
-            'rotation_euler_deg': {
-                'roll': float(np.degrees(euler[0])),
-                'pitch': float(np.degrees(euler[1])),
-                'yaw': float(np.degrees(euler[2]))
-            }
-        }
-        
-        with open(yaml_path, 'w') as f:
-            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
-        
-        Logger.loginfo(f"💾 Calibration saved (YAML): {yaml_path}")
-        
-        # ===== Save main file =====
-        with open(self.main_output_file, 'w') as f:
-            yaml.dump(calib_data, f, default_flow_style=False, sort_keys=False, indent=2)
-        
-        Logger.loginfo(f"💾 Calibration saved in main file: {self.main_output_file}")
-        
-        # ===== Save extrinsic_matrix.yaml in calibration_results folder =====
-        extrinsic_file = os.path.join(self.calib_results_folder, 'extrinsic_matrix.yaml')
-        
-        # T is the transformation matrix returned by ViSP (eMc or bMc).
-        # Transforms points from the camera frame to the parent frame (effector or base).
-        # Therefore, T is mathematically T_c2w. The inverse is T_w2c.
-        T_c2w = T
-        T_w2c = np.linalg.inv(T)
-        
-        # Convert matrices to flat lists of 16 elements
-        T_w2c_flat = T_w2c.flatten().tolist()
-        T_c2w_flat = T_c2w.flatten().tolist()
-        
-        # Convert all values to native float with high precision
-        T_w2c_flat = [float(x) for x in T_w2c_flat]
-        T_c2w_flat = [float(x) for x in T_c2w_flat]
-        
-        # Create structure with 'camera' key and index 1
-        extrinsic_data = {
-            'camera': {
-                1: {
-                    'T_w2c': T_w2c_flat,
-                    'T_c2w': T_c2w_flat
-                }
-            }
-        }
-        
-        with open(extrinsic_file, 'w') as f:
-            # Use default_flow_style=None for readable but compact format
-            yaml.dump(extrinsic_data, f, default_flow_style=None, sort_keys=False, indent=2)
-        
-        Logger.loginfo(f"💾 Extrinsic matrix saved in: {extrinsic_file}")
-    
+        request = ComputeEffectorCameraQuick.Request()
+        request.camera_object, request.world_effector = TransformArray(), TransformArray()
+        request.camera_object.header, request.world_effector.header = board.header, robot.header
+        request.camera_object.transforms = board.transforms
+        # with the camera fixed (eye to hand) the solver takes the robot poses inverted
+        request.world_effector.transforms = (
+            robot.transforms if self.about['eye_in_hand']
+            else [inverted(pose) for pose in robot.transforms])
+        Logger.loginfo(f'Calibrating with {counts[0]} poses')
+        response = self.client.call(service, request)
+        if response is None:
+            Logger.logerr('The ViSP solver gave no answer')
+            return 'failed'
+        pose = response.effector_camera
+        translation, rotation, euler = pose.translation, pose.rotation, euler_of(pose)
+        Logger.loginfo(f'Camera pose: x {translation.x:.6f}, y {translation.y:.6f}, '
+                       f'z {translation.z:.6f} m; quaternion x {rotation.x:.6f}, '
+                       f'y {rotation.y:.6f}, z {rotation.z:.6f}, w {rotation.w:.6f}; '
+                       f'roll {euler[0]:.6f}, pitch {euler[1]:.6f}, yaw {euler[2]:.6f} rad')
+        written = write_result(self.folder, pose, dict(self.about, num_poses_used=counts[0]))
+        Logger.loginfo(f'Written: {written}')
+        return 'finish'
+
     def on_stop(self):
-        """Clean up VISP process on finish"""
-        if self.visp_process:
-            Logger.loginfo("🛑 Stopping VISP...")
-            try:
-                os.killpg(os.getpgid(self.visp_process.pid), signal.SIGINT)
-                self.visp_process.wait(timeout=5)
-            except:
-                try:
-                    self.visp_process.terminate()
-                    self.visp_process.wait(timeout=3)
-                except:
-                    try:
-                        self.visp_process.kill()
-                    except:
-                        pass
-            self.visp_process = None
-            Logger.loginfo("✅ VISP stopped")
+        """Stop the solver this state started."""
+        self.solver.stop()

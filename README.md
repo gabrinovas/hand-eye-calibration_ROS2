@@ -24,7 +24,7 @@ Once all poses and detections are gathered, the data is fed into the ViSP (Visua
 - **Eye-to-Hand Mode:** The camera is fixed and observes the board mounted on the moving arm. The system automatically handles the strict mathematical inversion of the robot's kinematics to solve for the transformation between the Base and the Camera ($^{b}M_{c}$).
 
 ### 4. Output Generation
-Finally, the computed $4 \times 4$ spatial matrices ($T_{c2w}$ and $T_{w2c}$) and quaternions are serialized and exported to standard `.yaml` and `.ini` files. These drop-in configuration files can be injected directly into subsequent robotic grasping, perception, or visual-servoing pipelines without any further mathematical conversion.
+Finally, the computed $4 \times 4$ matrix, its inverse and the quaternion are written to one `.yaml` file per calibration, together with what it is the calibration of (robot, cell and frames). That file can be injected directly into subsequent robotic grasping, perception, or visual-servoing pipelines without any further mathematical conversion.
 
 ## Acknowledgment
 This charuco marker detection is forked from the [charuco_detector](https://github.com/carlosmccosta/charuco_detector).
@@ -82,9 +82,12 @@ After this, you can press `Runtime Control` on the top, execution window will sh
 
 <center><img src="doc/resource/camera_calibration_execution.png" alt="camera_calibration_execution" style="width: 80%;"/></center>
 
-Before press `Start Execution`, parameter `pic_num` decide how many calibration picture you will take, 
-parameter `square_size`, `marker_size` , `col_count` , `row_count` means the spec of charuco marker board we use.
-parameter `save_file_name` can let you change your result file name.
+Before pressing `Start Execution`, the parameter `pic_num` decides how many calibration pictures you will take and
+`camera_type` which camera is calibrated. The board is not a parameter: its squares, sizes and dictionary are in
+`charuco_calibrator/config/board.yaml`, the same board every calibration uses.
+
+The pictures go to `~/calibrations/<camera>/intrinsic_calibrations/camera_calib_pictures/` and the result to
+`~/calibrations/<camera>/intrinsic_calibrations/` (see below).
 
 ### Prepare the robot
 Activate robot and open with MoveIt. 
@@ -118,27 +121,76 @@ This repository supports dynamic path resolution per camera model (e.g., `realse
 
 ### Folder Organization (`~/calibrations/`)
 - **Camera Intrinsics (`~/calibrations/<camera_model>/intrinsic_calibrations/`)**:
-  - Saved with exact timestamp labels: `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml` (e.g., `camera_intrinsics_2026-03-04_09-02-39.yaml`).
-  - Active/latest intrinsic calibration is mirrored at `~/calibrations/<camera_model>/camera_intrinsics.yaml`.
+  - `camera_intrinsics.yaml`: **the calibration in use**. It is what the applications and the camera-robot calibration read, and what `latest` means. One format, with everything known: camera matrix, distortion coefficients, resolution, reprojection error, date and board.
+  - `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml`: a copy of each calibration, in the same format, kept as history. To go back to one of them, copy it over `camera_intrinsics.yaml`.
+  - `camera_calib_pictures/`: the pictures of the last capture.
 - **Extrinsic Calibrations per Camera, Robot & Cell (`~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/<cell>/`)**:
   - A calibration belongs to one camera, one robot model **and one cell** (the place where that robot and that camera stand): the same robot model in another cell has another camera pose.
-  - Each cell folder holds `pictures/`, `robot_poses/`, `charuco_table_poses/` and `calibration_results/` (`camera_extrinsics.yaml`, `camera_extrinsics.ini`, `extrinsic_matrix.yaml`). Example: `~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/right/`.
+  - Each cell folder holds `pictures/`, `robot_poses/`, `charuco_table_poses/` and `calibration_results/` (`camera_extrinsics.yaml`, the only result file). Example: `~/calibrations/realsense_d435i/extrinsic_calibration/ur5e/right/`.
   - `camera_extrinsics.yaml` says what it is the calibration of: `robot_model`, `cell`, `base_frame` and `camera_frame`, besides the transform. The programs that use it check those fields.
-  - Folders and frames are decided in one place: `charuco_calibrator/charuco_calibrator/calibration_layout.py`.
+  - Folders, file names and frames are decided in one place: `charuco_calibrator/config/layout.yaml` and `robots.yaml` (read by `charuco_calibrator/charuco_calibrator/calibration_layout.py`).
 - **Robot Configuration Files (`~/calibrations/robot_calibration/<robot_name>/`)**:
   - The factory kinematics calibration extracted from each robot.
 
 ### FlexBE Behavior Parameters (`capture_and_calibrate`)
-- **`camera_type`**: Set to `realsense_d435i` or custom camera identifier.
+- **`camera_type`**: A camera of `charuco_calibrator/config/cameras.yaml` (`realsense_d435i`). Its name is also the folder of its calibrations.
 - **`robot_name`**: Set to `ur5e` or `ufactory_lite6`.
   - **UR5e**: Uses `ur_moveit_config`, `ur_moveit.launch.py`, `base_frame` = `base_link`, `tool_frame` = `tool0`. (`base_link`, not `base`: the UR `base` frame is the same point turned half a turn about the vertical axis, and the applications work in `base_link`.)
   - **UFactory Lite 6**: Uses `xarm_moveit_config`, `lite6_moveit_fake.launch.py` (sim) / `lite6_moveit_realmove.launch.py` (real), `base_frame` = `link_base`, `tool_frame` = `link_eef`.
 - **`cell`**: The cell the robot and the camera stand in (for example `right`, `left`, `basic`, `kth_table`). Required: the calibration is stored and identified per cell.
 - **`robot_ip`**: Leave it empty. The address of the robot of the cell is read from the robot addresses file of the installation, whose path is in the environment variable `UR_ONROBOT_ROBOT_ADDRESSES` (`default: {<cell>: <address>}`). No address is written in this repository. Type one only to use another robot.
-- **`camera_intrinsics_file`**: Set to `'latest'` to use the newest intrinsic file, or enter a specific timestamped filename from `~/calibrations/<camera_model>/intrinsic_calibrations/`.
+- **`camera_intrinsics_file`**: `latest` to use the intrinsic calibration in use (`camera_intrinsics.yaml`), or the name of one of the dated copies of `~/calibrations/<camera_model>/intrinsic_calibrations/`.
 - **`use_fake_hardware`**: `True` for simulation (fake controllers), `False` for real hardware.
 
 ---
 
 ## Result Files
 Results are exported per robot and cell under `~/calibrations/<camera_model>/extrinsic_calibration/<robot_name>/<cell>/calibration_results/`.
+`camera_extrinsics.yaml` is the result, and the only file: robot, cell, frames, date, number of poses, the pose of
+the camera as `transform_matrix` (camera to robot base), `inverse_transform_matrix` (robot base to camera),
+translation, quaternion and Euler angles. `charuco_table_poses/` keeps what the result was computed from: `calibration_pairs.yaml` (robot pose and board pose of every picture used) and a copy of each picture with the
+detection drawn.
+
+## Configuration
+
+No value is written in the code: every program reads the YAML files below, and a file or a value that is missing
+stops it with a `[Fail-Fast]` error that names it.
+
+| File | What it holds |
+|---|---|
+| `charuco_calibrator/config/board.yaml` | The ChArUco board: squares, sizes, dictionary |
+| `charuco_calibrator/config/detection.yaml` | Markers and corners a picture needs, for each kind of calibration |
+| `charuco_calibrator/config/layout.yaml` | Folders and file names of the calibrations, camera frame |
+| `charuco_calibrator/config/robots.yaml` | Robots: calibration folder, frames, MoveIt launch; variable of the addresses file |
+| `charuco_calibrator/config/cameras.yaml` | Cameras: driver and the one stream the pictures are taken with |
+| `charuco_calibrator/config/hand_eye_node.yaml` | Topics of the node `charuco_hand_eye` |
+| `hand_eye_flexbe_states/config/processes.yaml` | Programs the states start (ViSP, the detection node, MoveIt) and their waits |
+| `hand_eye_flexbe_states/config/capture_ui.yaml` | Window of the captures: texts, keys, sizes |
+
+Two things are not in those files because FlexBE needs them where they are: the parameters of each behavior and
+their defaults are in its manifest (`hand_eye_flexbe_behaviors/manifest/`) and repeated in its `add_parameter`
+lines (a test checks that they agree).
+
+To add a robot, add its entry to `robots.yaml` and its option to the `robot_name` parameter of the manifests. To add
+a camera, add its entry to `cameras.yaml` and its option to the `camera_type` parameter.
+
+## The behaviors and the FlexBE editor
+
+The three `*_sm.py` files keep the layout the FlexBE editor generates, because the FlexBE app reads their text to
+show and run them. They are maintained by hand, with the code of this repository inside the `[MANUAL]` tags: use the
+editor to run the behaviors, not to save them (a save writes the file again and keeps only what is inside the tags).
+The states follow the same rule: one class per file, with the interface in its docstring.
+
+## Tests and linters
+
+Each of the three packages (`charuco_calibrator`, `hand_eye_flexbe_states`, `hand_eye_flexbe_behaviors`) has its
+tests in `test/` and is checked with `ament_flake8`, `ament_pep257` and `ament_copyright`:
+
+```bash
+colcon build --packages-select charuco_calibrator hand_eye_flexbe_states hand_eye_flexbe_behaviors
+source install/setup.bash
+cd src/<package> && python3 -m pytest test && ament_flake8 . && ament_pep257 . && ament_copyright .
+```
+
+None of them needs a robot, a camera or a display. What they cannot cover is the capture itself (the camera, the
+window and the pose of the real robot).

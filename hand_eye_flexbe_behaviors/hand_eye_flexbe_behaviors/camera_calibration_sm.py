@@ -1,107 +1,76 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-###########################################################
-#               WARNING: Generated code!                  #
-#              **************************                 #
-# Manual changes may get lost if file is generated again. #
-# Only code inside the [MANUAL] tags will be kept.        #
-###########################################################
+# Copyright 2021 Chien shao-yu, Gabriel Novas
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
-from flexbe_core import Behavior, Autonomy, OperatableStateMachine, ConcurrencyContainer, PriorityContainer, Logger
+# This file keeps the layout the FlexBE editor generates, because the FlexBE app reads it to show
+# and run the behavior. It is maintained by hand: saving the behavior from the editor writes the
+# file again and keeps only the code inside the [MANUAL] tags.
+
+"""Behavior camera_calibration: intrinsic calibration of a camera with pictures of the board."""
+
+# [MANUAL_IMPORT]
+from charuco_calibrator.calibration_layout import intrinsic_folders
+# [/MANUAL_IMPORT]
+from flexbe_core import Autonomy, Behavior, Logger, OperatableStateMachine
 from hand_eye_flexbe_states.charuco_camera_calibration import CharucoCameraCalibrationState
 from hand_eye_flexbe_states.take_picture import TakePictureState
-# Additional imports can be added inside the following tags
-# [MANUAL_IMPORT]
-import os
-# [/MANUAL_IMPORT]
 
 
-'''
-Created on Tue Nov 15 2022
-@author: Gabriel
-'''
 class camera_calibrationSM(Behavior):
-    '''
-    Camera calibration with Charuco board
-    
-    This behavior allows:
-    1. Manually capturing Charuco board images (ENTER/SPACE)
-    2. Automatically calibrating the camera using charuco_calibrator
-    3. Saving the results in ~/calibrations/camera_intrinsics.yaml
-    '''
+    """
+    Calibrate a camera with pictures of the ChArUco board.
 
+    1. The operator takes the pictures of the board (SPACE or ENTER for each one, ESC cancels).
+    2. The camera is calibrated with them. The result is written in the intrinsic folder of the
+       camera: camera_intrinsics.yaml (the one in use) and a dated copy.
+    """
 
     def __init__(self, node):
         super(camera_calibrationSM, self).__init__()
         self.name = 'camera_calibration'
         self.node = node
 
-        # parameters of this behavior
+        # parameters of this behavior: the same, with the same defaults, as its manifest
+        self.add_parameter('pic_num', 30)
+        self.add_parameter('camera_type', 'realsense_d435i')
+
         CharucoCameraCalibrationState.initialize_ros(node)
         TakePictureState.initialize_ros(node)
         OperatableStateMachine.initialize_ros(node)
         Logger.initialize(node)
-        self.add_parameter('pic_num', 30)
-        self.add_parameter('square_size', 0.0200)
-        self.add_parameter('marker_size', 0.0150)
-        self.add_parameter('col_count', 10)
-        self.add_parameter('row_count', 14)
-        self.add_parameter('camera_type', 'realsense_d435i')
-        self.add_parameter('save_file_name', 'camera_intrinsics.yaml')
-        
-        base_intrinsic_path = os.path.expanduser('~/calibrations/realsense_d435i/intrinsic_calibrations')
-        self.add_parameter('output_folder', os.path.join(base_intrinsic_path, 'camera_calib_pictures'))
 
-        # references to used behaviors
-
-        # Additional initialization code can be added inside the following tags
         # [MANUAL_INIT]
-        
         # [/MANUAL_INIT]
-
-        # Behavior comments:
-
-
 
     def create(self):
         # x:570 y:120, x:130 y:365
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
 
-        if not self.output_folder:
-            self.output_folder = os.path.expanduser(f'~/calibrations/{self.camera_type}/intrinsic_calibrations/camera_calib_pictures')
-
-        # Additional creation code can be added inside the following tags
         # [MANUAL_CREATE]
-        
+        pictures_folder = intrinsic_folders(self.camera_type)['pictures']
         # [/MANUAL_CREATE]
-
 
         with _state_machine:
             # x:149 y:88
             OperatableStateMachine.add('take_camera_cali_pic',
-                                        TakePictureState(pic_num=self.pic_num, 
-                                                       camera_type=self.camera_type,
-                                                       output_folder=self.output_folder),
-                                        transitions={'done': 'camera_calibration', 'failed': 'failed'},
-                                        autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
+                                       TakePictureState(pic_num=self.pic_num,
+                                                        camera_type=self.camera_type,
+                                                        output_folder=pictures_folder),
+                                       transitions={'done': 'camera_calibration',
+                                                    'failed': 'failed'},
+                                       autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
             # x:348 y:87
             OperatableStateMachine.add('camera_calibration',
-                                        CharucoCameraCalibrationState(square_size=self.square_size, 
-                                                                     marker_size=self.marker_size, 
-                                                                     col_count=self.col_count, 
-                                                                     row_count=self.row_count, 
-                                                                     save_file_name=self.save_file_name,
-                                                                     images_folder=self.output_folder,
-                                                                     camera_type=self.camera_type),
-                                        transitions={'done': 'finished', 'failed': 'failed'},
-                                        autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
-
+                                       CharucoCameraCalibrationState(
+                                           images_folder=pictures_folder,
+                                           camera_type=self.camera_type),
+                                       transitions={'done': 'finished', 'failed': 'failed'},
+                                       autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 
         return _state_machine
 
-
-    # Private functions can be added inside the following tags
     # [MANUAL_FUNC]
-    
     # [/MANUAL_FUNC]

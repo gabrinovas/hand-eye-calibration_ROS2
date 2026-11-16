@@ -2,64 +2,34 @@
 
 <behavior name="camera_calibration">
 
-	<executable package_path="hand_eye_flexbe_behaviors.camera_calibration_sm" class="camera_calibrationSM" />
-	<tagstring>Camera calibration with Charuco board</tagstring>
-	<author>Gabriel</author>
-	<date>Tue Nov 15 2022 (Modified: Feb 2026)</date>
-	<description>
-		Behavior for camera calibration using a Charuco board.
-		
-		Flow:
-		1. Manual capture of Charuco board photos in different positions
-		2. Automatic camera calibration using charuco_calibrator
-		3. Saving timestamped results in ~/calibrations/intrinsic_calibrations/camera_intrinsics_YYYY-MM-DD_HH-MM-SS.yaml and updating default ~/calibrations/camera_intrinsics.yaml
-		
-		Controls during capture:
-		- SPACE or ENTER: Take photo
-		- ESC: Cancel
-	</description>
+    <executable package_path="hand_eye_flexbe_behaviors.camera_calibration_sm" class="camera_calibrationSM" />
+    <tagstring>Camera calibration with Charuco board</tagstring>
+    <author>Gabriel Novas</author>
+    <date>2026-11-16</date>
+    <description>
+        Intrinsic calibration of a camera with pictures of the ChArUco board (the board of
+        charuco_calibrator/config/board.yaml).
 
+        1. Capture: move the board in front of the camera and press SPACE or ENTER for each picture
+           (ESC cancels). The pictures of a previous capture are deleted first.
+        2. Calibration: the camera is calibrated with the pictures.
 
-	<!-- Contained Behaviors -->
+        Everything is stored in ~/calibrations/CAMERA/intrinsic_calibrations/:
+        - camera_calib_pictures/ (the pictures)
+        - camera_intrinsics.yaml (the calibration in use: what the applications and the camera-robot
+          calibration read; matrix, distortion, resolution, reprojection error and board)
+        - camera_intrinsics_DATE.yaml (a copy of it, kept as history)
+    </description>
 
-	<!-- Available Parameters -->
-	<params>
+    <params>
+        <param type="numeric" name="pic_num" default="30" label="Number of pictures" hint="Number of pictures to take (recommended: 20 to 30)">
+            <min value="5" />
+            <max value="100" />
+        </param>
 
-		<param type="numeric" name="pic_num" default="30" label="Number of photos" hint="Number of images to capture (recommended: 20-30)">
-			<min value="5" />
-			<max value="100" />
-		</param>
-
-		<param type="numeric" name="square_size" default="0.0200" label="Square size (m)" hint="Board square size in meters">
-			<min value="0.001" />
-			<max value="0.1" />
-		</param>
-
-		<param type="numeric" name="marker_size" default="0.0150" label="Marker size (m)" hint="ArUco marker size in meters">
-			<min value="0.001" />
-			<max value="0.1" />
-		</param>
-
-		<param type="numeric" name="col_count" default="10" label="Columns" hint="Number of Charuco board columns">
-			<min value="5" />
-			<max value="20" />
-		</param>
-
-		<param type="numeric" name="row_count" default="14" label="Rows" hint="Number of Charuco board rows">
-			<min value="5" />
-			<max value="20" />
-		</param>
-
-		<param type="enum" name="camera_type" default="realsense_d435i" label="Camera type" hint="Select camera driver">
-			<option value="realsense_d435i" />
-			<option value="other" />
-		</param>
-
-		<param type="text" name="save_file_name" default="camera_intrinsics.yaml" label="File name" hint="Calibration file name (saved in ~/calibrations/camera_type/intrinsic_calibrations/)" />
-
-		<param type="text" name="output_folder" default="~/calibrations/realsense_d435i/intrinsic_calibrations/camera_calib_pictures" label="Folder for images" hint="Folder to save images for intrinsic calibration" readonly="true" />
-
-	</params>
-
+        <param type="enum" name="camera_type" default="realsense_d435i" label="Camera" hint="Camera to calibrate (a camera of charuco_calibrator/config/cameras.yaml)">
+            <option value="realsense_d435i" />
+        </param>
+    </params>
 
 </behavior>

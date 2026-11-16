@@ -1,0 +1,27 @@
+# Programs the states start, and how long they wait for them.
+visp:  # solver of the camera-robot calibration (ComputeCalibState)
+  package: visp_hand2eye_calibration
+  executable: visp_hand2eye_calibration_calibrator
+  service: /compute_effector_camera_quick
+  start_timeout_s: 15  # how long its start is waited for, looking every poll_period_s
+  poll_period_s: 1.0
+
+detector:  # node that detects the board in the stored pictures (OfflineFindCharucoState)
+  package: charuco_calibrator
+  executable: charuco_hand_eye
+  node_names: [hand_eye_calibrator, charuco_hand_eye]  # a node with one of these names is the detector
+  startup_wait_s: 5.0
+  detection_timeout_s: 120  # the state fails when the pairs have not arrived by then
+  publish_rate_hz: 0.5
+
+# MoveIt of the robot (LaunchMoveItState). What is launched is in charuco_calibrator/config/robots.yaml; MoveIt and
+# RViz open on the display of the behavior engine (the one of the container).
+moveit:
+  node_name: move_group  # MoveIt is taken as running when a node with this name exists
+  startup_wait_s: 3.0
+
+stop:  # stopping a program: interrupt it, then terminate it, then kill it
+  interrupt_wait_s: 5
+  terminate_wait_s: 3
+
+ros_query_timeout_s: 2  # 'ros2 node list' and 'ros2 service list' are given this long

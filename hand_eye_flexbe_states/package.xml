@@ -1,41 +1,37 @@
 <?xml version="1.0"?>
-<?xml-model
-    href="http://download.ros.org/schema/package_format3.xsd"
-    schematypens="http://www.w3.org/2001/XMLSchema"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>hand_eye_flexbe_states</name>
   <version>1.0.0</version>
   <description>
-     Custom FlexBE states for hand-eye calibration.
-     Includes states for pose capture, launching MoveIt,
-     offline processing, and calibration computation with VISP.
+    FlexBE states of the camera calibrations: capture of pictures and robot poses, launch of MoveIt,
+    detection of the board in the stored pictures and computation of the calibration with ViSP.
   </description>
   <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
   <license>MIT</license>
 
-  <exec_depend>rclcpp</exec_depend>
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>flexbe_core</exec_depend>
-  <exec_depend>flexbe_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>cv_bridge</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf_transformations</exec_depend>
-  <exec_depend>visp_hand2eye_calibration</exec_depend>
-  <exec_depend>charuco_calibrator</exec_depend>
-  <exec_depend>psutil</exec_depend>
-  <exec_depend>pyrealsense2</exec_depend>
-  <exec_depend>opencv-python</exec_depend>
-  <exec_depend>pyyaml</exec_depend>
-
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
-
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>charuco_calibrator</exec_depend>
+  <exec_depend>flexbe_core</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-psutil</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>ros2node</exec_depend>
+  <exec_depend>ros2run</exec_depend>
+  <exec_depend>ros2service</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>visp_hand2eye_calibration</exec_depend>
+  <!-- pyrealsense2 (Intel RealSense cameras) has no rosdep key: it is installed with librealsense -->
+
+  <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
+  <test_depend>ament_cmake_pep257</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <flexbe_states />

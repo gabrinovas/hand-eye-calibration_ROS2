@@ -1,124 +1,60 @@
-#!/usr/bin/env python3
-"""
-FlexBE state to launch MoveIt automatically for UR5e.
-"""
+# Copyright 2026 Gabriel Novas
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
 
-from flexbe_core import EventState, Logger
-import subprocess
+"""FlexBE state that starts the MoveIt of the robot, for the operator to move it with."""
+
 import time
-import os
-import psutil
-from ament_index_python.packages import get_package_share_directory
+
+from charuco_calibrator.calibration_layout import robot_entry
+from flexbe_core import EventState, Logger
+from hand_eye_flexbe_states.managed_process import ManagedProcess, ros_lists
+from hand_eye_flexbe_states.settings import processes
+
 
 class LaunchMoveItState(EventState):
     """
-    Launches MoveIt with GUI for UR5e.
-    
-    -- moveit_launch_file    string   MoveIt launch file
-    -- robot_name            string   Robot name (ur5e)
-    -- moveit_config_package string   Configuration package
-    -- robot_ip              string   Address of the real robot ('' with fake hardware)
-    -- use_fake_hardware     bool     Use simulation or real robot
-    
-    <= done                     MoveIt launched (even if not 100% ready)
-    <= failed                   Error during launch
+    Start MoveIt with RViz for a robot, unless it is already running, and leave it running.
+
+    What is launched for each robot is in charuco_calibrator/config/robots.yaml.
+
+    -- robot_name         string  Robot model (ur5e, ufactory_lite6)
+    -- robot_ip           string  Address of the real robot ('' with fake hardware)
+    -- use_fake_hardware  bool    Simulated robot instead of the real one
+
+    <= done    MoveIt launched (it may still be starting)
+    <= failed  Not used: the capture that follows fails when the robot gives no pose
     """
-    
-    def __init__(self, moveit_launch_file='ur_moveit.launch.py', 
-                 robot_name='ur5e',
-                 moveit_config_package='ur_moveit_config',
-                 robot_ip='',
-                 use_fake_hardware=True):
+
+    def __init__(self, robot_name, robot_ip, use_fake_hardware):
         super().__init__(outcomes=['done', 'failed'])
-        
-        self.moveit_launch_file = moveit_launch_file
-        self.robot_name = robot_name
-        self.moveit_config_package = moveit_config_package
-        self.robot_ip = robot_ip
-        self.use_fake_hardware = use_fake_hardware
-        self.process = None
-        self.launch_attempted = False
-        
+        moveit = robot_entry(robot_name)['moveit']
+        fake = str(bool(use_fake_hardware)).lower()
+        self.command = ['ros2', 'launch', moveit['package'],
+                        moveit['launch_fake' if use_fake_hardware else 'launch']]
+        self.command += [argument.format(use_fake_hardware=fake)
+                         for argument in moveit['arguments']]
+        if str(robot_ip).strip():  # the address of the installation, given by the behavior
+            self.command.append(f'robot_ip:={str(robot_ip).strip()}')
+        self.settings = processes('moveit')
+        self.moveit = ManagedProcess(self.command, quiet=True)
+
     def on_start(self):
-        """Launch MoveIt when starting the state"""
-        if self.launch_attempted:
+        """Launch MoveIt when the behavior starts."""
+        if ros_lists('node', [self.settings['node_name']]):
+            Logger.loginfo('MoveIt is already running')
             return
-            
-        self.launch_attempted = True
-        
+        Logger.loginfo('Launching MoveIt: ' + ' '.join(self.command))
         try:
-            # Quick check: if MoveIt nodes exist, do not launch
-            if self._is_moveit_basically_running():
-                Logger.loginfo("✅ MoveIt is already running")
-                return
-            
-            Logger.loginfo("="*60)
-            Logger.loginfo(f"🚀 Launching MoveIt for {self.robot_name}...")
-            Logger.loginfo("="*60)
-            
-            # Construct launch command based on robot type
-            cmd = [
-                'ros2', 'launch',
-                self.moveit_config_package,
-                self.moveit_launch_file
-            ]
-            
-            if 'lite6' in self.robot_name.lower() or 'xarm' in self.moveit_config_package.lower():
-                # UFactory Lite 6 / xArm MoveIt launch parameters
-                cmd.extend(['add_gripper:=true', 'launch_rviz:=true'])
-                if self.moveit_launch_file.startswith('xarm'):
-                    cmd.append('robot_type:=lite6')
-            else:
-                # UR MoveIt launch parameters (UR5e, UR10, etc.)
-                cmd.extend([
-                    f'ur_type:={self.robot_name}',
-                    f'use_fake_hardware:={str(self.use_fake_hardware).lower()}',
-                    'launch_rviz:=true'
-                ])
-            if self.robot_ip:  # the address of the installation, given by the behaviour
-                cmd.append(f'robot_ip:={self.robot_ip}')
-            
-            Logger.loginfo(f"📋 Command: {' '.join(cmd)}")
-            
-            # Environment variables
-            env = os.environ.copy()
-            env['DISPLAY'] = ':0'
-            
-            # Launch in separate process
-            self.process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-                env=env
-            )
-            
-            # Wait ONLY 3 seconds for basic startup
-            Logger.loginfo("⏳ Waiting 3 seconds for MoveIt to start...")
-            time.sleep(3)
-            
-            Logger.loginfo("✅ MoveIt launched, continuing with capture...")
-            
-        except Exception as e:
-            Logger.logerr(f"❌ Error launching MoveIt: {str(e)}")
-    
-    def _is_moveit_basically_running(self):
-        """Quick check: only looks if move_group node exists"""
-        try:
-            result = subprocess.run(
-                ['ros2', 'node', 'list'],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            return 'move_group' in result.stdout
-        except:
-            return False
-    
+            self.moveit.start()
+        except OSError as error:
+            Logger.logerr(f'MoveIt could not be launched: {error}')
+            return
+        time.sleep(self.settings['startup_wait_s'])
+        Logger.loginfo('MoveIt launched: the capture goes on while it finishes starting')
+
     def execute(self, userdata):
-        """Always return done to continue with capture"""
+        """Go on to the capture."""
         return 'done'
-    
-    def on_stop(self):
-        """Do nothing, MoveIt keeps running"""
-        pass

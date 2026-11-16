@@ -1,31 +1,27 @@
 <?xml version="1.0"?>
-<?xml-model
-    href="http://download.ros.org/schema/package_format3.xsd"
-    schematypens="http://www.w3.org/2001/XMLSchema"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>hand_eye_flexbe_behaviors</name>
   <version>1.0.0</version>
   <description>
-     FlexBE behaviors for hand-eye calibration.
-     Includes manual and automatic calibration with MoveIt.
+    FlexBE behaviors of the camera calibrations: intrinsic calibration of a camera, camera-robot calibration
+    of a camera, robot and cell, and its computation again from the stored pictures and robot poses.
   </description>
   <maintainer email="gabriel.novas@aimen.es">Gabriel Novas</maintainer>
   <license>MIT</license>
 
-  <exec_depend>rclcpp</exec_depend>
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>flexbe_core</exec_depend>
-  <exec_depend>flexbe_msgs</exec_depend>
-  <exec_depend>hand_eye_flexbe_states</exec_depend>
-  <exec_depend>charuco_calibrator</exec_depend>
-
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
-
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>charuco_calibrator</exec_depend>
+  <exec_depend>flexbe_core</exec_depend>
+  <exec_depend>hand_eye_flexbe_states</exec_depend>
+
+  <test_depend>ament_cmake_copyright</test_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
+  <test_depend>ament_cmake_pep257</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <flexbe_behaviors />
