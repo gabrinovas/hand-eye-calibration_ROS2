@@ -14,6 +14,7 @@
 from charuco_calibrator.calibration_layout import calibration_folders
 from charuco_calibrator.calibration_layout import camera_frame
 from charuco_calibrator.calibration_layout import checked_cell
+from charuco_calibrator.camera_serials import chosen_serial
 from charuco_calibrator.calibration_layout import layout
 from charuco_calibrator.calibration_layout import robot_entry
 # [/MANUAL_IMPORT]
@@ -40,6 +41,7 @@ class TestDetectionOnlySM(Behavior):
 
         # parameters of this behavior: the same, with the same defaults, as its manifest
         self.add_parameter('camera_type', 'realsense_d435i')
+        self.add_parameter('camera_serial', '')
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('cell', '')
         self.add_parameter('eye_in_hand', False)
@@ -62,6 +64,7 @@ class TestDetectionOnlySM(Behavior):
         # frames and folders of the robot and the cell
         cell = checked_cell(self.cell)
         folders = calibration_folders(self.camera_type, self.robot_name, cell)
+        serial = chosen_serial(self.camera_type, self.camera_serial)
         base_frame = robot_entry(self.robot_name)['base_frame']
         pictures_folder, poses_folder = folders['pictures'], folders['robot_poses']
         pairs_folder, calibration_folder = folders['charuco_table_poses'], folders['root']
@@ -80,6 +83,7 @@ class TestDetectionOnlySM(Behavior):
                                            eye_in_hand=self.eye_in_hand,
                                            camera_intrinsics_file=intrinsics_in_use,
                                            camera_type=self.camera_type,
+                                           camera_serial=serial,
                                            base_frame=base_frame),
                                        transitions={'completed': 'Compute_Calibration',
                                                     'failed': 'failed'},

@@ -77,18 +77,22 @@ def test_a_ros_listing_that_cannot_be_asked_counts_as_not_listed_and_says_so(mon
 class Pipeline:
     """Stand-in for a RealSense pipeline that only starts with the streams it accepts."""
 
-    accepted, started, stopped = (), [], 0
+    accepted, started, devices, stopped = (), [], [], 0
 
     def start(self, config):
         if config.stream[:2] not in Pipeline.accepted:
             raise RuntimeError(f'cannot resolve {config.stream[:2]}')
         Pipeline.started.append(config.stream)
+        Pipeline.devices.append(config.device)
 
     def stop(self):
         Pipeline.stopped += 1
 
 
 class Config:
+    def enable_device(self, serial):
+        self.device = serial
+
     def enable_stream(self, _kind, width, height, _pixel_format, fps):
         self.stream = (width, height, fps)
 
@@ -101,26 +105,28 @@ def realsense(monkeypatch):
     module.stream = module.format = type('names', (), {'color': 'color', 'bgr8': 'bgr8'})
     monkeypatch.setitem(sys.modules, 'pyrealsense2', module)
     monkeypatch.setattr(Pipeline, 'started', [])
+    monkeypatch.setattr(Pipeline, 'devices', [])
     monkeypatch.setattr(Pipeline, 'stopped', 0)
     return Pipeline
 
 
 def test_the_camera_starts_with_its_one_stream_or_not_at_all(realsense):
     realsense.accepted = ((1920, 1080), (1280, 720))
-    camera = CameraStream('realsense_d435i')
-    assert camera.start(warm_up_s=0.0) == 'RealSense 1920x1080 at 30 Hz'
+    camera = CameraStream('realsense_d435i', '42')
+    assert camera.start(warm_up_s=0.0) == 'RealSense 42 1920x1080 at 30 Hz'
     assert realsense.started == [(1920, 1080, 30)]
+    assert realsense.devices == ['42']  # the unit asked for, never any camera connected
     camera.stop()
     assert realsense.stopped == 1 and camera.pipeline is None
     realsense.accepted = ((1280, 720),)  # a camera that only gives another resolution
     with pytest.raises(RuntimeError, match=r'\[Fail-Fast\].*1920x1080 at 30 Hz.*cannot resolve'):
-        CameraStream('realsense_d435i').start(warm_up_s=0.0)
+        CameraStream('realsense_d435i', '42').start(warm_up_s=0.0)
     assert realsense.started == [(1920, 1080, 30)]  # no other resolution was tried
     assert set(camera.settings) == {'driver', 'color', 'frame_timeout_ms'}
     with pytest.raises(ConfigError, match=r"\[Fail-Fast\] Unknown camera 'other'"):
-        CameraStream('other')
+        CameraStream('other', '42')
     with pytest.raises(RuntimeError, match='has not been started'):
-        CameraStream('usb').picture()
+        CameraStream('usb', 'usb0').picture()
     assert camera_stream.REALSENSE == 'realsense'
 
 

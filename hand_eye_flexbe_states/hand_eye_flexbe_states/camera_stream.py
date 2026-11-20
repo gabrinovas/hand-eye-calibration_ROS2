@@ -5,7 +5,9 @@
 # https://opensource.org/licenses/MIT.
 
 """
-Color pictures from a camera of charuco_calibrator/config/cameras.yaml: RealSense or USB.
+Color pictures from a camera of charuco_calibrator/config/cameras.yaml: RealSense or USB. A
+RealSense camera is opened by its serial number, so that the pictures are always of the unit whose
+calibration is being made.
 
 pyrealsense2 is imported when a RealSense camera is started, so that the states can be loaded on a
 computer without it.
@@ -23,7 +25,8 @@ REALSENSE, USB = 'realsense', 'usb'
 class CameraStream:
     """The color stream of a camera: start it, take pictures from it and stop it."""
 
-    def __init__(self, camera_type):
+    def __init__(self, camera_type, serial):
+        self.serial = str(serial)
         cameras = setting('cameras', 'cameras')
         if camera_type not in cameras:
             raise ConfigError(f"[Fail-Fast] Unknown camera '{camera_type}': "
@@ -50,15 +53,16 @@ class CameraStream:
         color = self.settings['color']
         asked = f"{color['width']}x{color['height']} at {color['fps']} Hz"
         pipeline, config = rs.pipeline(), rs.config()
+        config.enable_device(self.serial)
         config.enable_stream(rs.stream.color, color['width'], color['height'], rs.format.bgr8,
                              color['fps'])
         try:
             pipeline.start(config)
         except RuntimeError as error:
-            raise RuntimeError(f'[Fail-Fast] The RealSense camera does not give its stream of '
-                               f'cameras.yaml ({asked}): {error}') from error
+            raise RuntimeError(f'[Fail-Fast] The RealSense camera {self.serial} does not give its '
+                               f'stream of cameras.yaml ({asked}): {error}') from error
         self.pipeline = pipeline
-        return f'RealSense {asked}'
+        return f'RealSense {self.serial} {asked}'
 
     def _open_usb(self):
         capture, color = cv2.VideoCapture(self.settings['device']), self.settings['color']

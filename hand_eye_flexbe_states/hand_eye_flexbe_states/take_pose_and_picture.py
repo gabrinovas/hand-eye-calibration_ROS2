@@ -30,6 +30,7 @@ class TakePoseAndPictureState(EventState):
 
     -- total_poses         int     Number of poses to capture
     -- camera_type         string  Camera (charuco_calibrator/config/cameras.yaml)
+    -- camera_serial       string  Serial number of the camera unit
     -- robot_name          string  Robot, shown in the window
     -- base_frame          string  Frame of the robot the poses are expressed in
     -- tool_frame          string  Frame of the robot whose pose is stored
@@ -40,7 +41,7 @@ class TakePoseAndPictureState(EventState):
     <= failed  The camera failed or the operator cancelled (ESC)
     """
 
-    def __init__(self, total_poses, camera_type, robot_name, base_frame, tool_frame,
+    def __init__(self, total_poses, camera_type, camera_serial, robot_name, base_frame, tool_frame,
                  pictures_folder, robot_poses_folder):
         super().__init__(outcomes=['done', 'failed'])
         self.total, self.taken = int(total_poses), 0
@@ -48,7 +49,7 @@ class TakePoseAndPictureState(EventState):
         self.folders = {'pictures': str(pictures_folder), 'robot_poses': str(robot_poses_folder)}
         for folder in self.folders.values():
             os.makedirs(folder, exist_ok=True)
-        self.camera = CameraStream(camera_type)
+        self.camera = CameraStream(camera_type, camera_serial)
         self.window = CaptureWindow(SECTION, robot=str(robot_name).upper())
         self.poses, self.ready = None, False
         Logger.loginfo(f'{self.total} poses will be captured: pictures in '

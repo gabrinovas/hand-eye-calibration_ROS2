@@ -14,6 +14,7 @@
 from charuco_calibrator.calibration_layout import calibration_folders
 from charuco_calibrator.calibration_layout import camera_frame
 from charuco_calibrator.calibration_layout import checked_cell
+from charuco_calibrator.camera_serials import chosen_serial
 from charuco_calibrator.calibration_layout import robot_entry
 from charuco_calibrator.robot_addresses import cell_address
 # [/MANUAL_IMPORT]
@@ -46,6 +47,7 @@ class CaptureAndCalibrateSM(Behavior):
         # parameters of this behavior: the same, with the same defaults, as its manifest
         self.add_parameter('total_poses', 20)
         self.add_parameter('camera_type', 'realsense_d435i')
+        self.add_parameter('camera_serial', '')
         self.add_parameter('robot_name', 'ur5e')
         self.add_parameter('cell', '')
         self.add_parameter('robot_ip', '')
@@ -75,6 +77,7 @@ class CaptureAndCalibrateSM(Behavior):
         robot = robot_entry(self.robot_name)
         cell = checked_cell(self.cell)
         folders = calibration_folders(self.camera_type, self.robot_name, cell)
+        serial = chosen_serial(self.camera_type, self.camera_serial)
         base_frame, tool_frame = robot['base_frame'], robot['tool_frame']
         pictures_folder, poses_folder = folders['pictures'], folders['robot_poses']
         pairs_folder, calibration_folder = folders['charuco_table_poses'], folders['root']
@@ -101,6 +104,7 @@ class CaptureAndCalibrateSM(Behavior):
                                        TakePoseAndPictureState(
                                            total_poses=self.total_poses,
                                            camera_type=self.camera_type,
+                                           camera_serial=serial,
                                            robot_name=self.robot_name,
                                            base_frame=base_frame,
                                            tool_frame=tool_frame,
@@ -118,6 +122,7 @@ class CaptureAndCalibrateSM(Behavior):
                                            eye_in_hand=self.eye_in_hand,
                                            camera_intrinsics_file=self.camera_intrinsics_file,
                                            camera_type=self.camera_type,
+                                           camera_serial=serial,
                                            base_frame=base_frame),
                                        transitions={'completed': 'Compute_Calibration',
                                                     'failed': 'failed'},

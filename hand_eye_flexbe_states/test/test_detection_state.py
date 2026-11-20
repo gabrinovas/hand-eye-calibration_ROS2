@@ -41,7 +41,7 @@ def state(node, tmp_path, monkeypatch):
     return OfflineFindCharucoState(
         pictures_folder=str(tmp_path / 'pictures'), robot_poses_folder=str(tmp_path / 'poses'),
         output_folder=str(tmp_path / 'pairs'), eye_in_hand=False, camera_intrinsics_file='latest',
-        camera_type='realsense_d435i', base_frame='base_link')
+        camera_type='realsense_d435i', camera_serial='42', base_frame='base_link')
 
 
 def subscribers(node, expected):

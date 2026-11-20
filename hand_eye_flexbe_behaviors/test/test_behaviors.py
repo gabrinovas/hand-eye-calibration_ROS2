@@ -15,6 +15,7 @@ import threading
 import xml.etree.ElementTree as ElementTree
 
 from ament_index_python.packages import get_package_prefix
+from charuco_calibrator import camera_serials
 import pytest
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
@@ -27,6 +28,7 @@ UR_MOVEIT = ['ros2', 'launch', 'ur_moveit_config', 'ur_moveit.launch.py', 'ur_ty
 CAPTURE = ('capture_and_calibrate_sm', 'CaptureAndCalibrateSM')
 RECOMPUTE = ('test_detection_only_sm', 'TestDetectionOnlySM')
 CAMERA = 'calibrations/realsense_d435i'
+SERIAL = '243322072721'  # the only RealSense connected in these tests
 
 
 def behavior_of(manifest):
@@ -55,6 +57,7 @@ def build(node, tmp_path, monkeypatch):
     addresses = tmp_path / 'robot_addresses.yaml'
     addresses.write_text('default:\n  right: 192.0.2.101\n  kth_table: 192.0.2.194\n')
     monkeypatch.setenv('UR_ONROBOT_ROBOT_ADDRESSES', str(addresses))
+    monkeypatch.setattr(camera_serials, 'connected_realsense_serials', lambda: [SERIAL])
 
     def make(module_name, class_name, **values):
         module = importlib.import_module(f'{PACKAGE}.{module_name}')
@@ -94,9 +97,25 @@ def test_manifest_and_code_agree_and_flexbe_can_read_the_code(manifest):
 def test_the_intrinsic_calibration_works_in_the_folder_of_the_camera(build, tmp_path):
     machine = build('camera_calibration_sm', 'camera_calibrationSM', pic_num=12)
     capture, calibration = machine['take_camera_cali_pic'], machine['camera_calibration']
-    folder = f'{tmp_path}/{CAMERA}/intrinsic_calibrations/camera_calib_pictures'
+    folder = f'{tmp_path}/{CAMERA}/intrinsic_calibrations/{SERIAL}/camera_calib_pictures'
     assert (capture.folder, capture.total, calibration.folder) == (folder, 12, folder)
+    assert capture.camera.serial == calibration.serial == SERIAL
     assert os.path.isdir(folder) and not os.path.exists('~')
+    other = build('camera_calibration_sm', 'camera_calibrationSM', camera_serial='111')
+    assert '/intrinsic_calibrations/111/' in other['camera_calibration'].folder
+
+
+def test_the_camera_unit_is_the_one_given_or_the_only_one_connected(build, monkeypatch):
+    detect = build(*RECOMPUTE, cell='right')['Process_Offline']
+    assert f"camera_serial:='{SERIAL}'" in detect.command  # text, also for an all-digit serial
+    given = build(*RECOMPUTE, cell='right', camera_serial='999')['Process_Offline']
+    assert "camera_serial:='999'" in given.command
+    for connected in ([], ['1', '2']):
+        monkeypatch.setattr(camera_serials, 'connected_realsense_serials', lambda c=connected: c)
+        with pytest.raises(ValueError, match=r'\[Fail-Fast\] Give the parameter camera_serial'):
+            build(*RECOMPUTE, cell='right')
+    with pytest.raises(ValueError, match=r"\[Fail-Fast\] The camera 'usb' has no serial number"):
+        build(*RECOMPUTE, cell='right', camera_type='usb')
 
 
 def test_the_calibration_of_a_cell_uses_its_robot_its_folders_and_its_address(build, tmp_path):
@@ -107,6 +126,7 @@ def test_the_calibration_of_a_cell_uses_its_robot_its_folders_and_its_address(bu
     assert launch.command == UR_MOVEIT + ['use_fake_hardware:=false', 'launch_rviz:=true',
                                           'robot_ip:=192.0.2.101']
     assert (capture.base_frame, capture.tool_frame) == ('base_link', 'tool0')
+    assert capture.camera.serial == SERIAL
     assert capture.folders == {'pictures': f'{root}/pictures',
                                'robot_poses': f'{root}/robot_poses'}
     assert f'output_folder:={root}/charuco_table_poses' in detect.command

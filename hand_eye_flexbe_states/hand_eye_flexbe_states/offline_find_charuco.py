@@ -29,6 +29,7 @@ class OfflineFindCharucoState(EventState):
     -- eye_in_hand             bool    True: the camera is on the robot
     -- camera_intrinsics_file  string  Intrinsic result to use: 'latest' or one of its files
     -- camera_type             string  Camera of the calibration
+    -- camera_serial           string  Serial number of the camera unit of the pictures
     -- base_frame              string  Frame of the robot the poses are expressed in
 
     #> base_h_tool_accumulated       TransformArray  Robot poses (base to tool)
@@ -39,7 +40,7 @@ class OfflineFindCharucoState(EventState):
     """
 
     def __init__(self, pictures_folder, robot_poses_folder, output_folder, eye_in_hand,
-                 camera_intrinsics_file, camera_type, base_frame):
+                 camera_intrinsics_file, camera_type, camera_serial, base_frame):
         super().__init__(outcomes=['completed', 'failed'],
                          output_keys=['base_h_tool_accumulated', 'camera_h_charuco_accumulated'])
         self.settings = processes('detector')
@@ -52,6 +53,7 @@ class OfflineFindCharucoState(EventState):
             '-p', f'eye_in_hand:={str(bool(eye_in_hand)).lower()}',
             '-p', f'base_frame:={base_frame}',
             '-p', f'camera_name:={camera_type}',
+            '-p', f"camera_serial:='{camera_serial}'",  # quoted: a number would not be text
             '-p', f'camera_intrinsics_file:={camera_intrinsics_file}',
             '-p', f"publish_rate:={float(self.settings['publish_rate_hz'])}"]
         self.detector = ManagedProcess(self.command, quiet=False)

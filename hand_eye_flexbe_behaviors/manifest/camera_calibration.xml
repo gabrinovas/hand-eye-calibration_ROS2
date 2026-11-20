@@ -14,7 +14,8 @@
            (ESC cancels). The pictures of a previous capture are deleted first.
         2. Calibration: the camera is calibrated with the pictures.
 
-        Everything is stored in ~/calibrations/CAMERA/intrinsic_calibrations/:
+        Everything is stored in ~/calibrations/CAMERA/intrinsic_calibrations/SERIAL/ (one folder per
+        camera unit):
         - camera_calib_pictures/ (the pictures)
         - camera_intrinsics.yaml (the calibration in use: what the applications and the camera-robot
           calibration read; matrix, distortion, resolution, reprojection error and board)
@@ -30,6 +31,8 @@
         <param type="enum" name="camera_type" default="realsense_d435i" label="Camera" hint="Camera to calibrate (a camera of charuco_calibrator/config/cameras.yaml)">
             <option value="realsense_d435i" />
         </param>
+
+        <param type="text" name="camera_serial" default="" label="Camera Serial" hint="Serial number of the camera unit to calibrate; empty: the only RealSense connected" />
     </params>
 
 </behavior>

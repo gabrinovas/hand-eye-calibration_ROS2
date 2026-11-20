@@ -12,6 +12,7 @@
 
 # [MANUAL_IMPORT]
 from charuco_calibrator.calibration_layout import intrinsic_folders
+from charuco_calibrator.camera_serials import chosen_serial
 # [/MANUAL_IMPORT]
 from flexbe_core import Autonomy, Behavior, Logger, OperatableStateMachine
 from hand_eye_flexbe_states.charuco_camera_calibration import CharucoCameraCalibrationState
@@ -24,7 +25,7 @@ class camera_calibrationSM(Behavior):
 
     1. The operator takes the pictures of the board (SPACE or ENTER for each one, ESC cancels).
     2. The camera is calibrated with them. The result is written in the intrinsic folder of the
-       camera: camera_intrinsics.yaml (the one in use) and a dated copy.
+       camera unit (its serial number): camera_intrinsics.yaml (the one in use) and a dated copy.
     """
 
     def __init__(self, node):
@@ -35,6 +36,7 @@ class camera_calibrationSM(Behavior):
         # parameters of this behavior: the same, with the same defaults, as its manifest
         self.add_parameter('pic_num', 30)
         self.add_parameter('camera_type', 'realsense_d435i')
+        self.add_parameter('camera_serial', '')
 
         CharucoCameraCalibrationState.initialize_ros(node)
         TakePictureState.initialize_ros(node)
@@ -49,7 +51,8 @@ class camera_calibrationSM(Behavior):
         _state_machine = OperatableStateMachine(outcomes=['finished', 'failed'])
 
         # [MANUAL_CREATE]
-        pictures_folder = intrinsic_folders(self.camera_type)['pictures']
+        serial = chosen_serial(self.camera_type, self.camera_serial)
+        pictures_folder = intrinsic_folders(self.camera_type, serial)['pictures']
         # [/MANUAL_CREATE]
 
         with _state_machine:
@@ -57,6 +60,7 @@ class camera_calibrationSM(Behavior):
             OperatableStateMachine.add('take_camera_cali_pic',
                                        TakePictureState(pic_num=self.pic_num,
                                                         camera_type=self.camera_type,
+                                                        camera_serial=serial,
                                                         output_folder=pictures_folder),
                                        transitions={'done': 'camera_calibration',
                                                     'failed': 'failed'},
@@ -66,7 +70,8 @@ class camera_calibrationSM(Behavior):
             OperatableStateMachine.add('camera_calibration',
                                        CharucoCameraCalibrationState(
                                            images_folder=pictures_folder,
-                                           camera_type=self.camera_type),
+                                           camera_type=self.camera_type,
+                                           camera_serial=serial),
                                        transitions={'done': 'finished', 'failed': 'failed'},
                                        autonomy={'done': Autonomy.Off, 'failed': Autonomy.Off})
 

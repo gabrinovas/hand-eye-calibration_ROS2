@@ -27,17 +27,18 @@ class TakePictureState(EventState):
 
     -- pic_num        int     Number of pictures to take
     -- camera_type    string  Camera (charuco_calibrator/config/cameras.yaml)
+    -- camera_serial  string  Serial number of the camera unit
     -- output_folder  string  Folder the pictures are saved in
 
     <= done    All the pictures were taken
     <= failed  The camera failed or the operator cancelled (ESC)
     """
 
-    def __init__(self, pic_num, camera_type, output_folder):
+    def __init__(self, pic_num, camera_type, camera_serial, output_folder):
         super(TakePictureState, self).__init__(outcomes=['done', 'failed'])
         self.total, self.taken = int(pic_num), 0
         self.folder = str(output_folder)
-        self.camera, self.window = CameraStream(camera_type), CaptureWindow(SECTION)
+        self.camera, self.window = CameraStream(camera_type, camera_serial), CaptureWindow(SECTION)
         self.ready = False
         os.makedirs(self.folder, exist_ok=True)
         Logger.loginfo(f'{self.total} pictures will be saved in {self.folder}')

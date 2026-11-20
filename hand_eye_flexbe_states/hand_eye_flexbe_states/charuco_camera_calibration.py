@@ -19,18 +19,20 @@ class CharucoCameraCalibrationState(EventState):
     Calibrate a camera with the pictures of the board stored in a folder.
 
     The board is the one of charuco_calibrator/config/board.yaml. The result is written in the
-    intrinsic folder of the camera as the calibration in use, with a dated copy as history.
+    intrinsic folder of the camera unit as the calibration in use, with a dated copy as history.
 
     -- images_folder  string  Folder with the pictures of the board
     -- camera_type    string  Camera the result belongs to
+    -- camera_serial  string  Serial number of the camera unit the result belongs to
 
     <= done    Calibration computed and written
     <= failed  Too few pictures could be used, or the calibration failed
     """
 
-    def __init__(self, images_folder, camera_type):
+    def __init__(self, images_folder, camera_type, camera_serial):
         super(CharucoCameraCalibrationState, self).__init__(outcomes=['done', 'failed'])
         self.folder, self.camera_type = str(images_folder), str(camera_type)
+        self.serial = str(camera_serial)
         self.board = load_board()
         Logger.loginfo(f'Pictures of the board ({self.board.columns} x {self.board.rows} squares '
                        f'of {self.board.square_length} m): {self.folder}')
@@ -54,8 +56,8 @@ class CharucoCameraCalibrationState(EventState):
                        f'error {solution.error:.6f}')
         Logger.loginfo(f'Camera matrix:\n{solution.camera_matrix}')
         Logger.loginfo(f'Distortion coefficients: {solution.distortion.reshape(-1)}')
-        for written in intrinsics_io.write(self.camera_type, self.board, solution.error,
-                                           solution.camera_matrix, solution.distortion,
-                                           solution.image_size):
+        for written in intrinsics_io.write(self.camera_type, self.serial, self.board,
+                                           solution.error, solution.camera_matrix,
+                                           solution.distortion, solution.image_size):
             Logger.loginfo(f'Written: {written}')
         return 'done'

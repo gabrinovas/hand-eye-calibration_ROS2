@@ -33,6 +33,8 @@
             <option value="realsense_d435i" />
         </param>
 
+        <param type="text" name="camera_serial" default="" label="Camera Serial" hint="Serial number of the camera unit of the pictures (its intrinsic calibration is used); empty: the only RealSense connected" />
+
         <param type="enum" name="robot_name" default="ur5e" label="Robot Name" hint="Robot model: it sets the MoveIt launch, the frames and the calibration folder (charuco_calibrator/config/robots.yaml)">
             <option value="ur5e" />
             <option value="ufactory_lite6" />

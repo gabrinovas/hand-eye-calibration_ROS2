@@ -86,8 +86,8 @@ Before pressing `Start Execution`, the parameter `pic_num` decides how many cali
 `camera_type` which camera is calibrated. The board is not a parameter: its squares, sizes and dictionary are in
 `charuco_calibrator/config/board.yaml`, the same board every calibration uses.
 
-The pictures go to `~/calibrations/<camera>/intrinsic_calibrations/camera_calib_pictures/` and the result to
-`~/calibrations/<camera>/intrinsic_calibrations/` (see below).
+The pictures go to `~/calibrations/<camera>/intrinsic_calibrations/<serial>/camera_calib_pictures/` and the result to
+`~/calibrations/<camera>/intrinsic_calibrations/<serial>/` (see below). `<serial>` is the serial number of the camera unit: the behavior parameter `camera_serial`, or the only RealSense connected when it is empty.
 
 ### Prepare the robot
 Activate robot and open with MoveIt. 
@@ -120,7 +120,7 @@ ros2 launch xarm_moveit_config lite6_moveit_realmove.launch.py robot_ip:=<IP_OF_
 This repository supports dynamic path resolution per camera model (e.g., `realsense_d435i`) and robot platform (**Universal Robots UR5e** and **UFactory Lite 6**).
 
 ### Folder Organization (`~/calibrations/`)
-- **Camera Intrinsics (`~/calibrations/<camera_model>/intrinsic_calibrations/`)**:
+- **Camera Intrinsics (`~/calibrations/<camera_model>/intrinsic_calibrations/<serial>/`)**:
   - `camera_intrinsics.yaml`: **the calibration in use**. It is what the applications and the camera-robot calibration read, and what `latest` means. One format, with everything known: camera matrix, distortion coefficients, resolution, reprojection error, date and board.
   - `camera_intrinsics_<YYYY-MM-DD_HH-MM-SS>.yaml`: a copy of each calibration, in the same format, kept as history. To go back to one of them, copy it over `camera_intrinsics.yaml`.
   - `camera_calib_pictures/`: the pictures of the last capture.
@@ -139,7 +139,7 @@ This repository supports dynamic path resolution per camera model (e.g., `realse
   - **UFactory Lite 6**: Uses `xarm_moveit_config`, `lite6_moveit_fake.launch.py` (sim) / `lite6_moveit_realmove.launch.py` (real), `base_frame` = `link_base`, `tool_frame` = `link_eef`.
 - **`cell`**: The cell the robot and the camera stand in (for example `right`, `left`, `basic`, `kth_table`). Required: the calibration is stored and identified per cell.
 - **`robot_ip`**: Leave it empty. The address of the robot of the cell is read from the robot addresses file of the installation, whose path is in the environment variable `UR_ONROBOT_ROBOT_ADDRESSES` (`default: {<cell>: <address>}`). No address is written in this repository. Type one only to use another robot.
-- **`camera_intrinsics_file`**: `latest` to use the intrinsic calibration in use (`camera_intrinsics.yaml`), or the name of one of the dated copies of `~/calibrations/<camera_model>/intrinsic_calibrations/`.
+- **`camera_intrinsics_file`**: `latest` to use the intrinsic calibration in use (`camera_intrinsics.yaml`), or the name of one of the dated copies of `~/calibrations/<camera_model>/intrinsic_calibrations/<serial>/`.
 - **`use_fake_hardware`**: `True` for simulation (fake controllers), `False` for real hardware.
 
 ---
